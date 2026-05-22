@@ -14,7 +14,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-BACKEND_URL = "http://localhost:8000"
+BACKEND_URL = "https://musikgua.streamlit.app/"
 
 # =========================================
 # AUTO START FASTAPI BACKEND
