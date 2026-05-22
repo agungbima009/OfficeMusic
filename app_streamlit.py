@@ -501,7 +501,7 @@ elif menu == "📂 Playlist Custom":
 # =========================================
 elif menu == "⚙️ Kontrol Server Fisik":
     st.markdown("<h2 style='font-weight: 700;'>⚙️ Kontrol Fisik Speaker Server</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #A0AEC0;'>Gunakan menu ini untuk mengontrol pemutaran musik secara fisik pada speaker keras server (menggunakan pygame backend).</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #A0AEC0;'>Gunakan menu ini untuk mengontrol pemutaran musik secara fisik pada speaker keras server.</p>", unsafe_allow_html=True)
     
     st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
     

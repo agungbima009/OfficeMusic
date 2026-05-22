@@ -3,7 +3,6 @@ uvicorn
 python-dotenv
 google-api-python-client
 yt-dlp
-pygame
 python-multipart
 pydantic
 requests
