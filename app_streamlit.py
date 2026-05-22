@@ -14,7 +14,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-BACKEND_URL = "https://musikgue.wikolabs.biz.id"
+BACKEND_URL = "backend_url"
 
 # =========================================
 # AUTO START FASTAPI BACKEND
@@ -176,9 +176,10 @@ show_server_status()
 # =========================================
 st.sidebar.markdown("<div style='text-align: center; padding: 10px 0;'><h2 style='color: white; font-weight:700;'>🧭 MENU</h2></div>", unsafe_allow_html=True)
 menu = st.sidebar.radio(
-    "",
+    "Menu",
     ["🔍 Cari & Unduh Musik", "🎵 Perpustakaan Lagu", "📂 Playlist Custom", "⚙️ Kontrol Server Fisik"],
-    index=1
+    index=1,
+    label_visibility="collapsed"
 )
 
 # Sidebar helper details
@@ -386,36 +387,18 @@ elif menu == "📂 Playlist Custom":
         new_pl_name = st.text_input("Nama Playlist Baru:", placeholder="Contoh: Lagu Santai Sore")
         if st.button("Buat Playlist"):
             if new_pl_name:
-                # We can initialize it by creating a dummy record, or we just instruct how to add a song.
-                # In our backend API, playlist is created dynamically when the first song is added.
-                # But to display it in the selectbox, let's add a song immediately or suggest it.
-                # Let's see: to let them choose which song to add to start the playlist:
+                # Call backend to create empty playlist
                 try:
-                    playlist_resp = requests.get(f"{BACKEND_URL}/playlist")
-                    if playlist_resp.status_code == 200:
-                        songs = playlist_resp.json().get("songs", [])
-                        if songs:
-                            song_filenames = [s["filename"] for s in songs]
-                            song_titles = [s["title"] for s in songs]
-                            selected_song_idx = st.selectbox(
-                                "Pilih lagu pertama untuk playlist ini:",
-                                range(len(songs)),
-                                format_func=lambda i: song_titles[i]
-                            )
-                            if st.button("Tambahkan & Buat", key="create_pl_btn"):
-                                first_song_file = song_filenames[selected_song_idx]
-                                add_resp = requests.post(
-                                    f"{BACKEND_URL}/playlists",
-                                    json={"playlist_name": new_pl_name, "song_filename": first_song_file}
-                                )
-                                if add_resp.status_code == 200 and add_resp.json().get("status"):
-                                    st.success(f"Playlist '{new_pl_name}' berhasil dibuat dengan lagu pertama!")
-                                    time.sleep(1)
-                                    st.rerun()
-                                else:
-                                    st.error("Gagal membuat playlist.")
-                        else:
-                            st.warning("Silakan unduh lagu terlebih dahulu di tab pencarian.")
+                    create_resp = requests.post(
+                        f"{BACKEND_URL}/playlists/create",
+                        json={"playlist_name": new_pl_name}
+                    )
+                    if create_resp.status_code == 200 and create_resp.json().get("status"):
+                        st.success(f"Playlist '{new_pl_name}' berhasil dibuat.")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("Gagal membuat playlist.")
                 except Exception as e:
                     st.error(str(e))
             else:
@@ -432,6 +415,24 @@ elif menu == "📂 Playlist Custom":
                     selected_pl_view = st.selectbox("Pilih Playlist untuk Dilihat/Dikelola:", all_pl)
                     
                     if selected_pl_view:
+                        # UI to add songs to this playlist
+                        try:
+                            all_songs_resp = requests.get(f"{BACKEND_URL}/playlist")
+                            if all_songs_resp.status_code == 200:
+                                all_songs = all_songs_resp.json().get("songs", [])
+                                song_options = [f"{s['title']} ({s['filename']})" for s in all_songs]
+                                selected_to_add = st.multiselect("Tambah lagu ke playlist ini", song_options, key=f"add_to_playlist_multi_{selected_pl_view}")
+                                if st.button("Tambahkan Lagu Terpilih", key=f"add_selected_btn_{selected_pl_view}"):
+                                    for opt in selected_to_add:
+                                        idx = song_options.index(opt)
+                                        song_file = all_songs[idx]["filename"]
+                                        add_resp = requests.post(f"{BACKEND_URL}/playlists", json={"playlist_name": selected_pl_view, "song_filename": song_file})
+                                    st.success("Lagu ditambahkan ke playlist.")
+                                    time.sleep(0.5)
+                                    st.rerun()
+                        except Exception as e:
+                            st.error(f"Error menambahkan lagu: {e}")
+                    
                         # Load songs in playlist
                         pl_detail_resp = requests.get(f"{BACKEND_URL}/playlists/{selected_pl_view}")
                         if pl_detail_resp.status_code == 200:
@@ -449,44 +450,55 @@ elif menu == "📂 Playlist Custom":
                                 else:
                                     st.error("Gagal menghapus playlist.")
                             
+                            # Play All Songs in Playlist button
+                            if st.button("▶️ Putar Semua Lagu di Server", key=f"play_all_btn_{selected_pl_view}"):
+                                stream_resp = requests.get(f"{BACKEND_URL}/playlists/{selected_pl_view}/stream")
+                                if stream_resp.status_code == 200:
+                                    urls = stream_resp.json().get("stream_urls", [])
+                                    if urls:
+                                        # Create HTML5 audio playlist
+                                        audio_html = "<audio controls autoplay>"
+                                        for u in urls:
+                                            audio_html += f'<source src="{BACKEND_URL}{u}" type="audio/mpeg">'
+                                        audio_html += "Your browser does not support the audio element."
+                                        audio_html += "</audio>"
+                                        st.markdown(audio_html, unsafe_allow_html=True)
+                                    else:
+                                        st.info("Playlist kosong, tidak ada lagu untuk diputar.")
+                                else:
+                                    st.error("Gagal mengambil URL streaming playlist.")
+                            
                             st.markdown("---")
                             
                             if pl_songs:
                                 for s_idx, s_song in enumerate(pl_songs):
                                     st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-                                    pl_col1, pl_col2 = st.columns([1, 4])
+                                    col_thumb, col_info, col_btns = st.columns([1, 4, 2])
                                     
-                                    with pl_col1:
+                                    with col_thumb:
                                         if s_song.get("thumbnail"):
                                             st.image(s_song["thumbnail"], use_column_width=True)
                                         else:
                                             st.markdown("<div style='height: 70px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); border-radius: 8px;'><span style='font-size: 2rem;'>🎵</span></div>", unsafe_allow_html=True)
                                             
-                                    with pl_col2:
+                                    with col_info:
                                         st.markdown(f"<div style='font-size:1.1rem; font-weight:600; color:white;'>{s_song['title']}</div>", unsafe_allow_html=True)
                                         st.markdown(f"<div style='font-size:0.85rem; color:#A0AEC0;'>{s_song.get('channel', '')}</div>", unsafe_allow_html=True)
+                                        st.audio(f"{BACKEND_URL}/stream/{s_song['filename']}", format="audio/mpeg")
                                         
-                                        # Play controls & Remove from playlist button
-                                        act_col1, act_col2, act_col3 = st.columns([2, 2, 1])
-                                        
-                                        with act_col1:
-                                            st.audio(f"{BACKEND_URL}/stream/{s_song['filename']}", format="audio/mpeg")
-                                            
-                                        with act_col2:
-                                            if st.button("📻 Putar di Server", key=f"pl_server_play_{s_idx}"):
-                                                play_resp = requests.post(f"{BACKEND_URL}/play/{s_song['filename']}")
-                                                if play_resp.status_code == 200 and play_resp.json().get("status"):
-                                                    st.toast(f"▶ Memutar di server: {s_song['title']}")
-                                                    time.sleep(0.5)
-                                                    st.rerun()
-                                                    
-                                        with act_col3:
-                                            if st.button("❌ Lepas", key=f"remove_from_pl_{s_idx}"):
-                                                rem_resp = requests.delete(f"{BACKEND_URL}/playlists/{selected_pl_view}/{s_song['filename']}")
-                                                if rem_resp.status_code == 200 and rem_resp.json().get("status"):
-                                                    st.toast("Lagu dilepas dari playlist.")
-                                                    time.sleep(0.5)
-                                                    st.rerun()
+                                    with col_btns:
+                                        if st.button("📻 Putar di Server", key=f"pl_server_play_{s_idx}"):
+                                            play_resp = requests.post(f"{BACKEND_URL}/play/{s_song['filename']}")
+                                            if play_resp.status_code == 200 and play_resp.json().get("status"):
+                                                st.toast(f"▶ Memutar di server: {s_song['title']}")
+                                                time.sleep(0.5)
+                                                st.rerun()
+                                        if st.button("❌ Lepas", key=f"remove_from_pl_{s_idx}"):
+                                            rem_resp = requests.delete(f"{BACKEND_URL}/playlists/{selected_pl_view}/{s_song['filename']}")
+                                            if rem_resp.status_code == 200 and rem_resp.json().get("status"):
+                                                st.toast("Lagu dilepas dari playlist.")
+                                                time.sleep(0.5)
+                                                st.rerun()
                                                     
                                     st.markdown("</div>", unsafe_allow_html=True)
                             else:

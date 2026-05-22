@@ -129,6 +129,39 @@ def get_all_playlists():
     conn.close()
     return playlists
 
+
+def create_playlist(playlist_name: str):
+    """Create an empty playlist entry.
+    Since playlists are stored in the `playlists` table as mappings, an empty playlist
+    can be represented by inserting a placeholder row with a null filename. This row
+    is later ignored when retrieving songs.
+    """
+    from app.core.database import get_connection
+    conn = get_connection()
+    cursor = conn.cursor()
+    # Ensure we don't duplicate placeholder rows
+    cursor.execute(
+        "SELECT COUNT(*) as cnt FROM playlists WHERE playlist_name = ? AND (song_filename IS NULL OR song_filename = '')",
+        (playlist_name,)
+    )
+    if cursor.fetchone()["cnt"] == 0:
+        cursor.execute(
+            "INSERT INTO playlists (playlist_name, song_filename) VALUES (?, '')",
+            (playlist_name,)
+        )
+        conn.commit()
+    conn.close()
+    return {"status": True, "message": f"Playlist {playlist_name} created (or already exists)"}
+
+
+def get_playlist_stream_urls(playlist_name: str):
+    """Return streaming URLs for all songs in a playlist.
+    The URLs correspond to the `/stream/{filename}` endpoint defined in the
+    `playlist_routes` module.
+    """
+    songs = get_songs_in_playlist(playlist_name)
+    return [f"/stream/{song['filename']}" for song in songs]
+
 def get_songs_in_playlist(playlist_name):
     from app.core.database import get_connection
     conn = get_connection()
@@ -145,9 +178,25 @@ def get_songs_in_playlist(playlist_name):
     return songs
 
 def add_song_to_playlist(playlist_name, song_filename):
+    """Add a song to a playlist, creating the playlist if it does not exist.
+    Returns a dict indicating success or failure.
+    """
     from app.core.database import get_connection
     conn = get_connection()
     cursor = conn.cursor()
+
+    # Ensure the playlist exists (create placeholder row if needed)
+    cursor.execute(
+        "SELECT COUNT(*) as cnt FROM playlists WHERE playlist_name = ?",
+        (playlist_name,)
+    )
+    if cursor.fetchone()["cnt"] == 0:
+        # Insert a placeholder entry to represent an empty playlist
+        cursor.execute(
+            "INSERT INTO playlists (playlist_name, song_filename) VALUES (?, '')",
+            (playlist_name,)
+        )
+        conn.commit()
 
     # Check if song exists in songs table
     cursor.execute("SELECT id FROM songs WHERE filename = ?", (song_filename,))

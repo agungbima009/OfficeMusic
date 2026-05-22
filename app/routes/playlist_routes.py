@@ -10,7 +10,9 @@ from app.services.playlist_service import (
     get_songs_in_playlist,
     add_song_to_playlist,
     remove_song_from_playlist,
-    delete_playlist
+    delete_playlist,
+    create_playlist,
+    get_playlist_stream_urls
 )
 
 from app.core.constants import (
@@ -27,6 +29,9 @@ router = APIRouter()
 class PlaylistAddRequest(BaseModel):
     playlist_name: str
     song_filename: str
+
+class PlaylistCreateRequest(BaseModel):
+    playlist_name: str
 
 # =========================================
 # GET PLAYLIST
@@ -98,6 +103,19 @@ def list_playlists():
         "playlists": playlists
     }
 
+## New endpoint to create an empty playlist
+@router.post("/playlists/create")
+def create_new_playlist(data: PlaylistCreateRequest):
+    result = create_playlist(data.playlist_name)
+    return result
+
+## New endpoint to get streaming URLs for all songs in a playlist
+@router.get("/playlists/{playlist_name}/stream")
+def stream_playlist(playlist_name: str):
+    urls = get_playlist_stream_urls(playlist_name)
+    return {"status": True, "playlist_name": playlist_name, "stream_urls": urls}
+
+## Existing endpoint to add a song to a playlist stays unchanged
 @router.post("/playlists")
 def add_to_playlist(data: PlaylistAddRequest):
     result = add_song_to_playlist(
