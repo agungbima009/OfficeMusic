@@ -3,6 +3,7 @@ import requests
 import os
 import time
 import subprocess
+from app.core.config import BACKEND_URL
 
 # =========================================
 # CONFIG & PAGE CONFIGURATION
@@ -14,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-BACKEND_URL = "https://musikgue.wikolabs.biz.id"
+# BACKEND_URL = os.getenv("BACKEND_URL")
 
 # =========================================
 # AUTO START FASTAPI BACKEND
