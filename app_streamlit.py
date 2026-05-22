@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# BACKEND_URL = os.getenv("BACKEND_URL")
+BACKEND_URL = BACKEND_URL.rstrip("/")  # Ensure no trailing slash for consistent API calls
 
 # =========================================
 # AUTO START FASTAPI BACKEND
