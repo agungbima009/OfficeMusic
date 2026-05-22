@@ -3,7 +3,9 @@ import requests
 import os
 import time
 import subprocess
+from dotenv import load_dotenv
 
+load_dotenv()
 # =========================================
 # CONFIG & PAGE CONFIGURATION
 # =========================================
