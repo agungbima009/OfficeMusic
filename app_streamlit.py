@@ -16,7 +16,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-BACKEND_URL = "backend_url"
+backend = st.secrets["backend_url"]
+key = st.secrets["youtube_api_key"]
 
 # =========================================
 # AUTO START FASTAPI BACKEND
