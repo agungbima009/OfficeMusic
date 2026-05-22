@@ -4,7 +4,6 @@ import os
 import time
 import subprocess
 
-
 # =========================================
 # CONFIG & PAGE CONFIGURATION
 # =========================================
@@ -15,7 +14,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-BACKEND_URL = "https://musikgua.streamlit.app/"
+BACKEND_URL = "https://musikgue.wikolabs.biz.id/api"
 
 # =========================================
 # AUTO START FASTAPI BACKEND
