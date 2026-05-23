@@ -1,3 +1,4 @@
+import os
 import yt_dlp
 
 from app.core.constants import (
@@ -7,9 +8,9 @@ from app.core.constants import (
 
 from app.utils.helper import safe_filename
 
-DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
-VIDEO_FOLDER.mkdir(parents=True, exist_ok=True)
+os.makedirs(VIDEO_FOLDER, exist_ok=True)
 
 def register_song(video, filename):
     from app.core.database import get_connection
@@ -42,13 +43,13 @@ def download_audio(video):
 
     filename = f"{title}.mp3"
 
-    output_mp3 = DOWNLOAD_FOLDER / filename
+    output_mp3 = os.path.join(DOWNLOAD_FOLDER, filename)
 
-    if output_mp3.exists():
+    if os.path.exists(output_mp3):
 
         register_song(video, filename)
 
-        return str(output_mp3), True
+        return output_mp3, True
 
     ydl_opts = {
 
@@ -56,7 +57,7 @@ def download_audio(video):
             'bestaudio/best',
 
         'outtmpl':
-            str(DOWNLOAD_FOLDER / f"{title}.%(ext)s"),
+            os.path.join(DOWNLOAD_FOLDER, f"{title}.%(ext)s"),
 
         'quiet':
             True,
@@ -92,7 +93,7 @@ def download_audio(video):
 
     register_song(video, filename)
 
-    return str(output_mp3), False
+    return output_mp3, False
 
 
 def download_video(video):
@@ -101,11 +102,11 @@ def download_video(video):
         video['title']
     )
 
-    output_mp4 = VIDEO_FOLDER / f"{title}.mp4"
+    output_mp4 = os.path.join(VIDEO_FOLDER, f"{title}.mp4")
 
-    if output_mp4.exists():
+    if os.path.exists(output_mp4):
 
-        return str(output_mp4), True
+        return output_mp4, True
 
     ydl_opts = {
 
@@ -113,7 +114,7 @@ def download_video(video):
             'bestvideo+bestaudio/best',
 
         'outtmpl':
-            str(VIDEO_FOLDER / f"{title}.%(ext)s"),
+            os.path.join(VIDEO_FOLDER, f"{title}.%(ext)s"),
 
         'quiet':
             True,
@@ -137,4 +138,4 @@ def download_video(video):
             [video['url']]
         )
 
-    return str(output_mp4), False
+    return output_mp4, False

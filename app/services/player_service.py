@@ -1,4 +1,5 @@
 
+import os
 import sys
 import threading
 
@@ -42,10 +43,9 @@ def _play(song_name):
 
     global CURRENT_SONG
 
-    song_file = DOWNLOAD_FOLDER / song_name
-    song_path = str(song_file)
+    song_path = os.path.join(DOWNLOAD_FOLDER, song_name)
 
-    if not song_file.exists():
+    if not os.path.exists(song_path):
 
         raise FileNotFoundError(
             f"Music not found: {song_path}"

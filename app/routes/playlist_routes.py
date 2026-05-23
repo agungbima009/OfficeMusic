@@ -1,4 +1,5 @@
 
+import os
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -60,9 +61,9 @@ async def stream_music(filename: str):
     # html_lib.unescape: decode &amp; -> & dll (HTML entity decode)
     filename = html_lib.unescape(unquote(filename))
 
-    file_path = DOWNLOAD_FOLDER / filename
+    file_path = os.path.join(DOWNLOAD_FOLDER, filename)
 
-    if not file_path.exists():
+    if not os.path.exists(file_path):
 
         return {
             "status": False,

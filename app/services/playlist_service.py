@@ -1,4 +1,5 @@
 
+import os
 from urllib.parse import quote
 
 from app.core.constants import DOWNLOAD_FOLDER
@@ -9,12 +10,12 @@ from app.core.constants import DOWNLOAD_FOLDER
 # =========================================
 def get_playlist():
 
-    if not DOWNLOAD_FOLDER.exists():
-        DOWNLOAD_FOLDER.mkdir(parents=True)
+    if not os.path.exists(DOWNLOAD_FOLDER):
+        os.makedirs(DOWNLOAD_FOLDER)
 
     disk_files = {
-        f.name for f in DOWNLOAD_FOLDER.iterdir()
-        if f.suffix == ".mp3"
+        f for f in os.listdir(DOWNLOAD_FOLDER)
+        if f.endswith(".mp3")
     }
 
     from app.core.database import get_connection
@@ -106,10 +107,10 @@ def get_playlist():
 # =========================================
 def delete_song(filename):
 
-    file_path = DOWNLOAD_FOLDER / filename
+    file_path = os.path.join(DOWNLOAD_FOLDER, filename)
 
-    if file_path.exists():
-        file_path.unlink()
+    if os.path.exists(file_path):
+        os.remove(file_path)
 
     from app.core.database import get_connection
 
@@ -145,13 +146,13 @@ def delete_song(filename):
 # =========================================
 def get_song_detail(filename):
 
-    file_path = DOWNLOAD_FOLDER / filename
+    file_path = os.path.join(DOWNLOAD_FOLDER, filename)
 
     file_size = 0.0
 
-    if file_path.exists():
+    if os.path.exists(file_path):
 
-        file_size = file_path.stat().st_size
+        file_size = os.path.getsize(file_path)
 
     from app.core.database import get_connection
 
