@@ -1,4 +1,5 @@
 import os
+import html
 import yt_dlp
 
 from app.core.constants import (
@@ -36,6 +37,9 @@ def register_song(video, filename):
         conn.close()
 
 def download_audio(video):
+
+    video['title'] = html.unescape(video.get('title', ''))
+    video['channel'] = html.unescape(video.get('channel', ''))
 
     title = safe_filename(
         video['title']
@@ -97,6 +101,9 @@ def download_audio(video):
 
 
 def download_video(video):
+
+    video['title'] = html.unescape(video.get('title', ''))
+    video['channel'] = html.unescape(video.get('channel', ''))
 
     title = safe_filename(
         video['title']

@@ -83,6 +83,7 @@ async def stream_music(filename: str):
 @router.delete("/playlist/{filename}")
 def delete_music(filename: str):
 
+    filename = html_lib.unescape(unquote(filename))
     result = delete_song(filename)
 
     return result
@@ -94,6 +95,7 @@ def delete_music(filename: str):
 @router.get("/playlist/detail/{filename}")
 def detail_music(filename: str):
 
+    filename = html_lib.unescape(unquote(filename))
     result = get_song_detail(filename)
 
     return result
@@ -149,9 +151,10 @@ def stream_playlist(playlist_name: str):
 @router.post("/playlists")
 def add_to_playlist(data: PlaylistAddRequest):
 
+    song_filename = html_lib.unescape(data.song_filename)
     result = add_song_to_playlist(
         data.playlist_name,
-        data.song_filename
+        song_filename
     )
 
     return result
@@ -197,6 +200,7 @@ def remove_from_playlist(
     filename: str
 ):
 
+    filename = html_lib.unescape(unquote(filename))
     result = remove_song_from_playlist(
         playlist_name,
         filename

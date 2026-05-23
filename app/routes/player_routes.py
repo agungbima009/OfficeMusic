@@ -36,6 +36,7 @@ class PlaylistRequest(BaseModel):
 @router.post("/play/{song_name}")
 def play(song_name: str):
 
+    song_name = html_lib.unescape(unquote(song_name))
     current = play_music(song_name)
 
     return {
@@ -51,8 +52,9 @@ def play(song_name: str):
 @router.post("/playlist/play")
 def play_playlist(data: PlaylistRequest):
 
+    songs = [html_lib.unescape(s) for s in data.songs]
     current = set_playlist_queue(
-        data.songs
+        songs
     )
 
     return {
