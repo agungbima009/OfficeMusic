@@ -3,7 +3,10 @@ import requests
 import os
 import time
 import subprocess
-from app.core.config import BACKEND_URL
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 # =========================================
 # CONFIG & PAGE CONFIGURATION
@@ -15,7 +18,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-BACKEND_URL = BACKEND_URL # Ensure no trailing slash for consistent API calls
+# BACKEND_URL = os.getenv("BACKEND_URL").rstrip("/")
+BACKEND_URL = "http://202.169.232.241:8120"  # Ensure no trailing slash for consistent API calls
 
 # =========================================
 # AUTO START FASTAPI BACKEND
