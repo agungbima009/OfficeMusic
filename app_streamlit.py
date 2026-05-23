@@ -1,575 +1,783 @@
-import streamlit as st
-import requests
-import os
-import time
-import subprocess
-from dotenv import load_dotenv
 
+import os
+from math import ceil
+from typing import Dict, List
+from urllib.parse import quote
+
+import requests
+import streamlit as st
+from dotenv import load_dotenv
+from streamlit.components.v1 import html
+
+# ======================================================
+# LOAD ENV
+# ======================================================
 load_dotenv()
 
+BACKEND_URL = os.getenv(
+    "BACKEND_URL",
+).rstrip("/")
 
-# =========================================
-# CONFIG & PAGE CONFIGURATION
-# =========================================
+# ======================================================
+# PAGE CONFIG
+# ======================================================
 st.set_page_config(
-    page_title="OfficeMusic - Premium Media Controller",
+    page_title="OfficeMusic",
     page_icon="🎵",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
-# BACKEND_URL = os.getenv("BACKEND_URL").rstrip("/")
-BACKEND_URL = "http://202.169.232.241:8120"  # Ensure no trailing slash for consistent API calls
+# ======================================================
+# SESSION POOL
+# ======================================================
+@st.cache_resource
+def get_session():
 
-# =========================================
-# AUTO START FASTAPI BACKEND
-# =========================================
-if "backend_started" not in st.session_state:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    RUN_PATH = os.path.join(BASE_DIR, "run.py")
+    session = requests.Session()
 
-    subprocess.Popen(["python", RUN_PATH])
+    adapter = requests.adapters.HTTPAdapter(
+        pool_connections=20,
+        pool_maxsize=20,
+        max_retries=2
+    )
 
-    st.session_state.backend_started = True
-    time.sleep(3)
-    
-# =========================================
-# CUSTOM PREMIUM STYLING (CSS)
-# =========================================
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+
+    return session
+
+
+session = get_session()
+
+# ======================================================
+# CACHE API
+# ======================================================
+@st.cache_data(ttl=60)
+def get_songs() -> List[Dict]:
+
+    try:
+
+        r = session.get(
+            f"{BACKEND_URL}/playlist",
+            timeout=10
+        )
+
+        if r.status_code == 200:
+            return r.json().get("songs", [])
+
+        return []
+
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=60)
+def get_playlists():
+
+    try:
+
+        r = session.get(
+            f"{BACKEND_URL}/playlists",
+            timeout=10
+        )
+
+        if r.status_code == 200:
+            return r.json().get("playlists", [])
+
+        return []
+
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=60)
+def get_playlist_detail(name):
+
+    try:
+
+        r = session.get(
+            f"{BACKEND_URL}/playlists/{name}",
+            timeout=10
+        )
+
+        if r.status_code == 200:
+            return r.json().get("songs", [])
+
+        return []
+
+    except Exception:
+        return []
+
+
+def clear_cache():
+    st.cache_data.clear()
+
+# ======================================================
+# CSS
+# ======================================================
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
-    
-    /* Global Styles */
-    html, body, [class*="css"] {
-        font-family: 'Outfit', sans-serif;
-    }
-    
-    /* Gradient Title and Header */
-    .app-title {
-        background: linear-gradient(135deg, #FF2E55 0%, #FF8E53 50%, #5856D6 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 800;
-        font-size: 3rem;
-        margin-bottom: 0.2rem;
-        text-align: center;
-        letter-spacing: -1px;
-    }
-    .app-subtitle {
-        color: #A0AEC0;
-        text-align: center;
-        font-size: 1.15rem;
-        margin-bottom: 2rem;
-        font-weight: 300;
-    }
-    
-    /* Sidebar Navigation */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #09090E 0%, #121221 100%) !important;
-        border-right: 1px solid rgba(255, 255, 255, 0.05);
-    }
-    
-    /* Custom Card Style (Glassmorphism) */
-    .glass-card {
-        background: rgba(255, 255, 255, 0.02);
-        border: 1px solid rgba(255, 255, 255, 0.04);
-        border-radius: 20px;
-        padding: 20px;
-        backdrop-filter: blur(15px);
-        margin-bottom: 20px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    }
-    
-    .glass-card:hover {
-        background: rgba(255, 255, 255, 0.04);
-        border-color: rgba(255, 46, 85, 0.3);
-        transform: translateY(-4px);
-        box-shadow: 0 15px 35px rgba(255, 46, 85, 0.15);
-    }
-    
-    /* Micro-Animations & Custom Buttons */
-    div.stButton > button {
-        background: linear-gradient(135deg, rgba(88, 86, 214, 0.2) 0%, rgba(255, 46, 85, 0.2) 100%);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        color: white;
-        font-weight: 600;
-        padding: 8px 16px;
-        transition: all 0.25s ease;
-    }
-    
-    div.stButton > button:hover {
-        background: linear-gradient(135deg, #5856D6 0%, #FF2E55 100%);
-        border-color: transparent;
-        transform: scale(1.03);
-        box-shadow: 0 5px 15px rgba(255, 46, 85, 0.4);
-    }
-    
-    /* Streamlit overrides for premium look */
-    .stProgress > div > div > div > div {
-        background: linear-gradient(90deg, #5856D6 0%, #FF2E55 100%);
-    }
-    
-    /* Song Title styling */
-    .song-title {
-        font-size: 1.2rem;
-        font-weight: 700;
-        color: #FFFFFF;
-        line-height: 1.4;
-        margin-bottom: 4px;
-    }
-    
-    .song-channel {
-        font-size: 0.95rem;
-        color: #A0AEC0;
-        margin-bottom: 12px;
-    }
+
+.block-container{
+    padding-top:2rem;
+}
+
+.main-title{
+    text-align:center;
+    font-size:3rem;
+    font-weight:800;
+    margin-bottom:0;
+}
+
+.sub-title{
+    text-align:center;
+    color:#9CA3AF;
+    margin-bottom:2rem;
+}
+
+.music-card{
+    background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.06);
+    border-radius:18px;
+    padding:15px;
+    margin-bottom:20px;
+    transition:0.2s;
+    height:100%;
+}
+
+.music-card:hover{
+    transform:translateY(-4px);
+    border-color:#7C3AED;
+}
+
+.music-title{
+    font-weight:700;
+    margin-top:10px;
+    line-height:1.3;
+    font-size:0.95rem;
+    min-height:55px;
+}
+
+.music-channel{
+    color:#9CA3AF;
+    font-size:0.8rem;
+    margin-bottom:10px;
+}
+
+.stButton button{
+    width:100%;
+    border-radius:10px;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
-# =========================================
-# APP HEADER
-# =========================================
-st.markdown("<div class='app-title'>🎵 OfficeMusic Controller</div>", unsafe_allow_html=True)
-st.markdown("<div class='app-subtitle'>Aesthetic Smart Media Server & Local Streaming Client</div>", unsafe_allow_html=True)
-
-# =========================================
-# BACKEND HEALTH CHECK
-# =========================================
-backend_active = False
-try:
-    health_resp = requests.get(BACKEND_URL, timeout=2)
-    if health_resp.status_code == 200 and health_resp.json().get("status"):
-        backend_active = True
-except Exception:
-    backend_active = False
-
-if not backend_active:
-    st.error("⚠️ **Server Backend Offline!**")
-    st.info("Harap jalankan server backend terlebih dahulu dengan perintah: `python run.py` di terminal Anda agar UI dapat berfungsi.")
-    st.stop()
-
-# =========================================
-# REAL-TIME PHYSICAL SERVER STATUS (Global Banner)
-# =========================================
-def show_server_status():
-    try:
-        current_resp = requests.get(f"{BACKEND_URL}/current")
-        if current_resp.status_code == 200:
-            current_song = current_resp.json().get("current_song")
-            if current_song:
-                st.markdown(f"""
-                <div class="glass-card" style="background: linear-gradient(135deg, rgba(88, 86, 214, 0.1) 0%, rgba(255, 46, 85, 0.1) 100%); border-color: rgba(255, 46, 85, 0.2); padding: 15px 25px; margin-bottom: 25px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <span style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: #FF2E55; font-weight: 700;">SERVER FISIK SEDANG MEMUTAR</span>
-                            <h3 style="margin: 5px 0 0 0; color: #FFFFFF; font-weight: 600;">🔊 {current_song}</h3>
-                        </div>
-                        <div style="font-size: 2rem; animation: pulse 2s infinite;">📻</div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-    except Exception:
-        pass
-
-show_server_status()
-
-# =========================================
-# SIDEBAR NAVIGATION
-# =========================================
-st.sidebar.markdown("<div style='text-align: center; padding: 10px 0;'><h2 style='color: white; font-weight:700;'>🧭 MENU</h2></div>", unsafe_allow_html=True)
-menu = st.sidebar.radio(
-    "Menu",
-    ["🔍 Cari & Unduh Musik", "🎵 Perpustakaan Lagu", "📂 Playlist Custom", "⚙️ Kontrol Server Fisik"],
-    index=1,
-    label_visibility="collapsed"
+# ======================================================
+# HEADER
+# ======================================================
+st.markdown(
+    "<div class='main-title'>🎵 OfficeMusic</div>",
+    unsafe_allow_html=True
 )
 
-# Sidebar helper details
-st.sidebar.markdown("---")
-st.sidebar.markdown("""
-<div style="color: #A0AEC0; font-size: 0.85rem; padding: 10px;">
-    <strong>ℹ️ Petunjuk:</strong><br>
-    • <strong>Stream in Browser:</strong> Putar musik langsung di HP / PC Anda.<br>
-    • <strong>Play on Server:</strong> Putar musik secara fisik melalui speaker hardware server.
-</div>
-""", unsafe_allow_html=True)
+st.markdown(
+    "<div class='sub-title'>Modern Local Music Streaming</div>",
+    unsafe_allow_html=True
+)
 
-# =========================================
-# MENU 1: YOUTUBE SEARCH & DOWNLOAD
-# =========================================
-if menu == "🔍 Cari & Unduh Musik":
-    st.markdown("<h2 style='font-weight: 700;'>🔍 YouTube Music Explorer</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #A0AEC0;'>Cari dan unduh lagu dari YouTube langsung ke server. Lagu yang diunduh akan otomatis terintegrasi ke database.</p>", unsafe_allow_html=True)
-    
-    query = st.text_input("Masukkan judul lagu atau penyanyi:", placeholder="Contoh: Coldplay - Yellow", key="search_query")
-    
+# ======================================================
+# HEALTH CHECK
+# ======================================================
+try:
+
+    health = session.get(
+        BACKEND_URL,
+        timeout=3
+    )
+
+    if health.status_code != 200:
+        st.error("Backend Offline")
+        st.stop()
+
+except Exception:
+    st.error("Backend Offline")
+    st.stop()
+
+# ======================================================
+# SIDEBAR
+# ======================================================
+st.sidebar.title("📂 Menu")
+
+menu = st.sidebar.radio(
+    "Navigation",
+    [
+        "🔍 Cari Musik",
+        "🎵 Library",
+        "📁 Playlist"
+    ]
+)
+
+if st.sidebar.button("♻️ Refresh Cache"):
+
+    clear_cache()
+
+    st.toast("Cache Refreshed")
+
+# ======================================================
+# PLAYER STATE
+# ======================================================
+if "current_audio" not in st.session_state:
+    st.session_state.current_audio = None
+
+if "current_song_name" not in st.session_state:
+    st.session_state.current_song_name = None
+
+if "playlist_queue" not in st.session_state:
+    st.session_state.playlist_queue = []
+
+if "playlist_queue_names" not in st.session_state:
+    st.session_state.playlist_queue_names = []
+
+if "playlist_index" not in st.session_state:
+    st.session_state.playlist_index = 0
+
+
+# ======================================================
+# SIDEBAR PLAYER
+# ======================================================
+with st.sidebar:
+
+    st.markdown("---")
+
+    st.markdown("## 🎧 Player")
+
+    if st.session_state.current_audio:
+
+        current_name = (
+            st.session_state.current_song_name
+            or "Unknown Music"
+        )
+
+        audio_url = st.session_state.current_audio
+
+        unique_audio_url = (
+            f"{audio_url}?t="
+            f"{st.session_state.playlist_index}"
+        )
+
+        player_html = f"""
+        <div style="
+            background: linear-gradient(
+                135deg,
+                rgba(124,58,237,0.18),
+                rgba(59,130,246,0.12)
+            );
+
+            border:1px solid rgba(124,58,237,0.3);
+
+            padding:15px;
+
+            border-radius:16px;
+
+            margin-bottom:15px;
+        ">
+
+            <div style="
+                color:#A78BFA;
+                font-size:0.75rem;
+                font-weight:700;
+                letter-spacing:1px;
+                margin-bottom:10px;
+            ">
+                🎧 NOW PLAYING
+            </div>
+
+            <div style="
+                color:white;
+                font-size:0.95rem;
+                font-weight:700;
+                margin-bottom:15px;
+                line-height:1.4;
+
+                overflow:hidden;
+
+                display:-webkit-box;
+
+                -webkit-line-clamp:3;
+
+                -webkit-box-orient:vertical;
+            ">
+                {current_name}
+            </div>
+
+            <audio
+                controls
+                autoplay
+                style="
+                    width:100%;
+                    height:40px;
+                "
+            >
+                <source
+                    src="{unique_audio_url}"
+                    type="audio/mpeg"
+                >
+            </audio>
+
+        </div>
+        """
+
+        html(
+            player_html,
+            height=180
+        )
+
+    else:
+
+        st.info("Belum ada musik diputar")
+
+
+# ======================================================
+# SEARCH MUSIC
+# ======================================================
+if menu == "🔍 Cari Musik":
+
+    st.title("🔍 Cari Musik")
+
+    query = st.text_input(
+        "Cari Lagu",
+        placeholder="Coldplay - Yellow"
+    )
+
     if query:
-        with st.spinner("Mencari lagu di YouTube..."):
-            try:
-                search_resp = requests.post(f"{BACKEND_URL}/youtube/search", json={"query": query})
-                if search_resp.status_code == 200:
-                    results = search_resp.json().get("results", [])
-                    if results:
-                        st.success(f"Ditemukan {len(results)} musik!")
-                        
-                        # Display search results as beautiful grid
-                        for idx, item in enumerate(results):
-                            st.markdown(f"<div class='glass-card'>", unsafe_allow_html=True)
-                            col1, col2 = st.columns([1, 3])
-                            
-                            with col1:
-                                st.image(item["thumbnail"], use_column_width=True)
-                                
-                            with col2:
-                                st.markdown(f"<div class='song-title'>{item['title']}</div>", unsafe_allow_html=True)
-                                st.markdown(f"<div class='song-channel'>📺 Channel: {item['channel']}</div>", unsafe_allow_html=True)
-                                
-                                # Buttons for download
-                                btn_col1, btn_col2, btn_col3 = st.columns(3)
-                                
-                                with btn_col1:
-                                    if st.button(f"📥 Unduh MP3", key=f"dl_mp3_{idx}"):
-                                        with st.spinner("Mengunduh audio..."):
-                                            dl_resp = requests.post(f"{BACKEND_URL}/youtube/download-audio", json=item)
-                                            if dl_resp.status_code == 200 and dl_resp.json().get("status"):
-                                                info = dl_resp.json()
-                                                cached_str = " (Menggunakan Cache)" if info.get("cached") else " (Unduhan Baru)"
-                                                st.toast(f"✅ Sukses mengunduh MP3{cached_str}!")
-                                                st.success(f"Tersimpan di: `{info.get('file_path')}`")
-                                            else:
-                                                st.error("Gagal mengunduh audio.")
-                                
-                                with btn_col2:
-                                    if st.button(f"🎥 Unduh MP4", key=f"dl_mp4_{idx}"):
-                                        with st.spinner("Mengunduh video..."):
-                                            dl_resp = requests.post(f"{BACKEND_URL}/youtube/download-video", json=item)
-                                            if dl_resp.status_code == 200 and dl_resp.json().get("status"):
-                                                info = dl_resp.json()
-                                                cached_str = " (Menggunakan Cache)" if info.get("cached") else " (Unduhan Baru)"
-                                                st.toast(f"✅ Sukses mengunduh MP4{cached_str}!")
-                                                st.success(f"Tersimpan di: `{info.get('file_path')}`")
-                                            else:
-                                                st.error("Gagal mengunduh video.")
-                                                
-                                with btn_col3:
-                                    st.markdown(f"<a href='{item['url']}' target='_blank'><button style='width:100%; background:rgba(255,255,255,0.05); color:white; border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:8px 16px; font-weight:600; cursor:pointer;'>🌐 Buka YouTube</button></a>", unsafe_allow_html=True)
-                                    
-                            st.markdown("</div>", unsafe_allow_html=True)
-                    else:
-                        st.warning("Musik tidak ditemukan.")
-                else:
-                    st.error("Gagal melakukan pencarian.")
-            except Exception as e:
-                st.error(f"Terjadi kesalahan: {e}")
 
-# =========================================
-# MENU 2: LOCAL LIBRARY & STREAMING PLAYER
-# =========================================
-elif menu == "🎵 Perpustakaan Lagu":
-    st.markdown("<h2 style='font-weight: 700;'>🎵 Perpustakaan Lagu Lokal</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #A0AEC0;'>Daftar lagu lokal yang terdaftar di database. Anda dapat memutarnya langsung di browser atau melalui speaker server.</p>", unsafe_allow_html=True)
-    
-    # Reload button
-    if st.button("🔄 Refresh Perpustakaan"):
-        st.rerun()
+        with st.spinner("Searching..."):
 
-    try:
-        playlist_resp = requests.get(f"{BACKEND_URL}/playlist")
-        if playlist_resp.status_code == 200:
-            songs = playlist_resp.json().get("songs", [])
-            
-            if songs:
-                st.write(f"Total Lagu di Library: **{len(songs)}**")
-                
-                # Render Library Items
-                for idx, song in enumerate(songs):
-                    st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-                    col1, col2 = st.columns([1, 4])
-                    
-                    with col1:
-                        # If thumbnail is empty (locally synced), show default icon
-                        if song.get("thumbnail"):
-                            st.image(song["thumbnail"], use_column_width=True)
-                        else:
-                            st.markdown("<div style='height: 120px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px dashed rgba(255,255,255,0.1);'><span style='font-size: 3rem;'>🎵</span></div>", unsafe_allow_html=True)
-                            
-                    with col2:
-                        st.markdown(f"<div class='song-title'>{song['title']}</div>", unsafe_allow_html=True)
-                        st.markdown(f"<div class='song-channel'>📺 Source/Channel: {song.get('channel', 'Local Sync')}</div>", unsafe_allow_html=True)
-                        
-                        # Size details
-                        size_str = ""
-                        try:
-                            detail_resp = requests.get(f"{BACKEND_URL}/playlist/detail/{song['filename']}")
-                            if detail_resp.status_code == 200:
-                                size_str = f"💾 Ukuran: **{detail_resp.json().get('size_mb', 0)} MB**"
-                        except Exception:
-                            pass
-                        
-                        if size_str:
-                            st.markdown(f"<div style='font-size: 0.9rem; color: #CBD5E0; margin-bottom: 12px;'>{size_str}</div>", unsafe_allow_html=True)
-                        
-                        # Dynamic playback triggers
-                        stream_col, server_col, playlist_col, delete_col = st.columns([2, 2, 2, 1])
-                        
-                        with stream_col:
-                            # Stream in Browser using st.audio
-                            audio_url = f"{BACKEND_URL}/stream/{song['filename']}"
-                            st.audio(audio_url, format="audio/mpeg")
-                            
-                        with server_col:
-                            # Play on Server
-                            if st.button("📻 Putar di Server", key=f"server_play_{idx}"):
-                                play_resp = requests.post(f"{BACKEND_URL}/play/{song['filename']}")
-                                if play_resp.status_code == 200 and play_resp.json().get("status"):
-                                    st.toast(f"▶ Memutar di server: {song['title']}")
-                                    time.sleep(0.5)
-                                    st.rerun()
-                                else:
-                                    st.error("Gagal memutar di server.")
-                                    
-                        with playlist_col:
-                            # Add to playlist custom
-                            try:
-                                playlists_resp = requests.get(f"{BACKEND_URL}/playlists")
-                                if playlists_resp.status_code == 200:
-                                    all_pl = playlists_resp.json().get("playlists", [])
-                                    
-                                    if all_pl:
-                                        selected_pl = st.selectbox(
-                                            "Tambahkan ke playlist:",
-                                            ["Pilih playlist..."] + all_pl,
-                                            key=f"pl_select_{idx}",
-                                            label_visibility="collapsed"
-                                        )
-                                        if selected_pl != "Pilih playlist...":
-                                            add_resp = requests.post(
-                                                f"{BACKEND_URL}/playlists",
-                                                json={"playlist_name": selected_pl, "song_filename": song["filename"]}
-                                            )
-                                            if add_resp.status_code == 200 and add_resp.json().get("status"):
-                                                st.toast(f"✅ Dimasukkan ke playlist: '{selected_pl}'")
-                                                time.sleep(0.5)
-                                                st.rerun()
-                                    else:
-                                        st.caption("Buat playlist di tab 'Playlist Custom'")
-                            except Exception:
-                                pass
-                                
-                        with delete_col:
-                            # Delete from Server
-                            if st.button("🗑️ Hapus", key=f"delete_song_{idx}"):
-                                del_resp = requests.delete(f"{BACKEND_URL}/playlist/{song['filename']}")
-                                if del_resp.status_code == 200 and del_resp.json().get("status"):
-                                    st.toast(f"🗑️ Lagu berhasil dihapus!")
-                                    time.sleep(0.5)
-                                    st.rerun()
-                                else:
-                                    st.error("Gagal menghapus lagu.")
-                                    
-                    st.markdown("</div>", unsafe_allow_html=True)
-            else:
-                st.info("Belum ada lagu yang diunduh. Silakan pergi ke tab 'Cari & Unduh Musik' untuk menambahkan lagu.")
-        else:
-            st.error("Gagal memuat daftar lagu dari backend.")
-    except Exception as e:
-        st.error(f"Koneksi backend gagal: {e}")
+            r = session.post(
+                f"{BACKEND_URL}/youtube/search",
+                json={"query": query},
+                timeout=30
+            )
 
-# =========================================
-# MENU 3: CUSTOM PLAYLIST MANAGER
-# =========================================
-elif menu == "📂 Playlist Custom":
-    st.markdown("<h2 style='font-weight: 700;'>📂 Manajemen Playlist Custom</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #A0AEC0;'>Buat, kelola, dan putar grup lagu Anda yang disimpan secara permanen di database SQLite.</p>", unsafe_allow_html=True)
-    
-    col_left, col_right = st.columns([1, 2])
-    
-    with col_left:
-        st.markdown("<h3 style='font-weight:600;'>➕ Buat Playlist Baru</h3>", unsafe_allow_html=True)
-        new_pl_name = st.text_input("Nama Playlist Baru:", placeholder="Contoh: Lagu Santai Sore")
-        if st.button("Buat Playlist"):
-            if new_pl_name:
-                # Call backend to create empty playlist
-                try:
-                    create_resp = requests.post(
-                        f"{BACKEND_URL}/playlists/create",
-                        json={"playlist_name": new_pl_name}
+        if r.status_code == 200:
+
+            results = r.json().get("results", [])
+
+            cols = st.columns(4)
+
+            for idx, item in enumerate(results):
+
+                with cols[idx % 4]:
+
+                    st.markdown(
+                        "<div class='music-card'>",
+                        unsafe_allow_html=True
                     )
-                    if create_resp.status_code == 200 and create_resp.json().get("status"):
-                        st.success(f"Playlist '{new_pl_name}' berhasil dibuat.")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("Gagal membuat playlist.")
-                except Exception as e:
-                    st.error(str(e))
-            else:
-                st.warning("Nama playlist tidak boleh kosong!")
-                
-    with col_right:
-        st.markdown("<h3 style='font-weight:600;'>📁 Daftar Playlist Anda</h3>", unsafe_allow_html=True)
-        try:
-            playlists_resp = requests.get(f"{BACKEND_URL}/playlists")
-            if playlists_resp.status_code == 200:
-                all_pl = playlists_resp.json().get("playlists", [])
-                
-                if all_pl:
-                    selected_pl_view = st.selectbox("Pilih Playlist untuk Dilihat/Dikelola:", all_pl)
-                    
-                    if selected_pl_view:
-                        # UI to add songs to this playlist
-                        try:
-                            all_songs_resp = requests.get(f"{BACKEND_URL}/playlist")
-                            if all_songs_resp.status_code == 200:
-                                all_songs = all_songs_resp.json().get("songs", [])
-                                song_options = [f"{s['title']} ({s['filename']})" for s in all_songs]
-                                selected_to_add = st.multiselect("Tambah lagu ke playlist ini", song_options, key=f"add_to_playlist_multi_{selected_pl_view}")
-                                if st.button("Tambahkan Lagu Terpilih", key=f"add_selected_btn_{selected_pl_view}"):
-                                    for opt in selected_to_add:
-                                        idx = song_options.index(opt)
-                                        song_file = all_songs[idx]["filename"]
-                                        add_resp = requests.post(f"{BACKEND_URL}/playlists", json={"playlist_name": selected_pl_view, "song_filename": song_file})
-                                    st.success("Lagu ditambahkan ke playlist.")
-                                    time.sleep(0.5)
-                                    st.rerun()
-                        except Exception as e:
-                            st.error(f"Error menambahkan lagu: {e}")
-                    
-                        # Load songs in playlist
-                        pl_detail_resp = requests.get(f"{BACKEND_URL}/playlists/{selected_pl_view}")
-                        if pl_detail_resp.status_code == 200:
-                            pl_songs = pl_detail_resp.json().get("songs", [])
-                            
-                            st.write(f"Playlist: **{selected_pl_view}** ({len(pl_songs)} Lagu)")
-                            
-                            # Delete playlist entirely button
-                            if st.button("🚨 Hapus Seluruh Playlist ini", key="del_pl_all"):
-                                del_pl_resp = requests.delete(f"{BACKEND_URL}/playlists/{selected_pl_view}")
-                                if del_pl_resp.status_code == 200 and del_pl_resp.json().get("status"):
-                                    st.success(f"Playlist '{selected_pl_view}' dihapus.")
-                                    time.sleep(1)
-                                    st.rerun()
-                                else:
-                                    st.error("Gagal menghapus playlist.")
-                            
-                            # Play All Songs in Playlist button
-                            if st.button("▶️ Putar Semua Lagu di Server", key=f"play_all_btn_{selected_pl_view}"):
-                                stream_resp = requests.get(f"{BACKEND_URL}/playlists/{selected_pl_view}/stream")
-                                if stream_resp.status_code == 200:
-                                    urls = stream_resp.json().get("stream_urls", [])
-                                    if urls:
-                                        # Create HTML5 audio playlist
-                                        audio_html = "<audio controls autoplay>"
-                                        for u in urls:
-                                            audio_html += f'<source src="{BACKEND_URL}{u}" type="audio/mpeg">'
-                                        audio_html += "Your browser does not support the audio element."
-                                        audio_html += "</audio>"
-                                        st.markdown(audio_html, unsafe_allow_html=True)
-                                    else:
-                                        st.info("Playlist kosong, tidak ada lagu untuk diputar.")
-                                else:
-                                    st.error("Gagal mengambil URL streaming playlist.")
-                            
-                            st.markdown("---")
-                            
-                            if pl_songs:
-                                for s_idx, s_song in enumerate(pl_songs):
-                                    st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-                                    col_thumb, col_info, col_btns = st.columns([1, 4, 2])
-                                    
-                                    with col_thumb:
-                                        if s_song.get("thumbnail"):
-                                            st.image(s_song["thumbnail"], use_column_width=True)
-                                        else:
-                                            st.markdown("<div style='height: 70px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); border-radius: 8px;'><span style='font-size: 2rem;'>🎵</span></div>", unsafe_allow_html=True)
-                                            
-                                    with col_info:
-                                        st.markdown(f"<div style='font-size:1.1rem; font-weight:600; color:white;'>{s_song['title']}</div>", unsafe_allow_html=True)
-                                        st.markdown(f"<div style='font-size:0.85rem; color:#A0AEC0;'>{s_song.get('channel', '')}</div>", unsafe_allow_html=True)
-                                        st.audio(f"{BACKEND_URL}/stream/{s_song['filename']}", format="audio/mpeg")
-                                        
-                                    with col_btns:
-                                        if st.button("📻 Putar di Server", key=f"pl_server_play_{s_idx}"):
-                                            play_resp = requests.post(f"{BACKEND_URL}/play/{s_song['filename']}")
-                                            if play_resp.status_code == 200 and play_resp.json().get("status"):
-                                                st.toast(f"▶ Memutar di server: {s_song['title']}")
-                                                time.sleep(0.5)
-                                                st.rerun()
-                                        if st.button("❌ Lepas", key=f"remove_from_pl_{s_idx}"):
-                                            rem_resp = requests.delete(f"{BACKEND_URL}/playlists/{selected_pl_view}/{s_song['filename']}")
-                                            if rem_resp.status_code == 200 and rem_resp.json().get("status"):
-                                                st.toast("Lagu dilepas dari playlist.")
-                                                time.sleep(0.5)
-                                                st.rerun()
-                                                    
-                                    st.markdown("</div>", unsafe_allow_html=True)
-                            else:
-                                st.info("Playlist kosong.")
-                else:
-                    st.info("Anda belum memiliki playlist custom. Buat playlist baru di panel kiri.")
-        except Exception as e:
-            st.error(f"Gagal mengambil playlist: {e}")
 
-# =========================================
-# MENU 4: SERVER PHYSICAL CONTROLLER
-# =========================================
-elif menu == "⚙️ Kontrol Server Fisik":
-    st.markdown("<h2 style='font-weight: 700;'>⚙️ Kontrol Fisik Speaker Server</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #A0AEC0;'>Gunakan menu ini untuk mengontrol pemutaran musik secara fisik pada speaker keras server.</p>", unsafe_allow_html=True)
-    
-    st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-    
-    try:
-        current_resp = requests.get(f"{BACKEND_URL}/current")
-        if current_resp.status_code == 200:
-            current_song = current_resp.json().get("current_song")
-            
-            if current_song:
-                st.markdown(f"""
-                <div style='text-align: center; padding: 20px;'>
-                    <span style='font-size: 5rem; animation: pulse 2s infinite;'>📻</span>
-                    <h2 style='color: white; margin-top: 15px;'>Sedang Diputar Secara Fisik:</h2>
-                    <h1 style='color: #FF2E55; font-weight:700;'>{current_song}</h1>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown("""
-                <div style='text-align: center; padding: 20px; color: #A0AEC0;'>
-                    <span style='font-size: 5rem;'>💤</span>
-                    <h2>Pemutar server fisik dalam keadaan mati/berhenti.</h2>
-                </div>
-                """, unsafe_allow_html=True)
-                
-            # Control buttons
-            st.markdown("<br>", unsafe_allow_html=True)
-            col_p, col_r, col_s = st.columns(3)
-            
-            with col_p:
-                if st.button("⏸️ Jeda (Pause) Server", key="srv_pause"):
-                    resp = requests.post(f"{BACKEND_URL}/pause")
-                    if resp.status_code == 200:
-                        st.toast("⏸️ Pemutaran fisik server dijeda.")
-                        
-            with col_r:
-                if st.button("▶️ Lanjutkan (Resume) Server", key="srv_resume"):
-                    resp = requests.post(f"{BACKEND_URL}/resume")
-                    if resp.status_code == 200:
-                        st.toast("▶️ Pemutaran fisik server dilanjutkan.")
-                        
-            with col_s:
-                if st.button("⏹️ Hentikan (Stop) Server", key="srv_stop"):
-                    resp = requests.post(f"{BACKEND_URL}/stop")
-                    if resp.status_code == 200:
-                        st.toast("⏹️ Pemutaran fisik server dihentikan.")
-                        time.sleep(0.5)
+                    st.image(
+                        item["thumbnail"],
+                        use_container_width=True
+                    )
+
+                    st.markdown(
+                        f"<div class='music-title'>{item['title']}</div>",
+                        unsafe_allow_html=True
+                    )
+
+                    st.markdown(
+                        f"<div class='music-channel'>{item['channel']}</div>",
+                        unsafe_allow_html=True
+                    )
+
+                    if st.button(
+                        "📥 Download",
+                        key=f"download_{idx}"
+                    ):
+
+                        with st.spinner("Downloading..."):
+
+                            dl = session.post(
+                                f"{BACKEND_URL}/youtube/download-audio",
+                                json=item,
+                                timeout=120
+                            )
+
+                        if dl.status_code == 200:
+
+                            clear_cache()
+
+                            st.success("Downloaded")
+
+                    st.markdown(
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+
+# ======================================================
+# LIBRARY
+# ======================================================
+elif menu == "🎵 Library":
+
+    st.title("🎵 Library")
+
+    songs = get_songs()
+
+    if not songs:
+
+        st.info("Library kosong")
+
+    else:
+
+        search = st.text_input(
+            "Filter Lagu",
+            placeholder="Cari lagu..."
+        ).lower()
+
+        filtered = []
+
+        for song in songs:
+
+            if search in song.get(
+                "title",
+                ""
+            ).lower():
+
+                filtered.append(song)
+
+        PAGE_SIZE = 12
+
+        total_pages = ceil(
+            len(filtered) / PAGE_SIZE
+        )
+
+        page = st.number_input(
+            "Page",
+            min_value=1,
+            max_value=max(total_pages, 1),
+            value=1
+        )
+
+        start = (page - 1) * PAGE_SIZE
+        end = start + PAGE_SIZE
+
+        page_songs = filtered[start:end]
+
+        cols = st.columns(4)
+
+        playlists = get_playlists()
+
+        for idx, song in enumerate(page_songs):
+
+            with cols[idx % 4]:
+
+                st.markdown(
+                    "<div class='music-card'>",
+                    unsafe_allow_html=True
+                )
+
+                if song.get("thumbnail"):
+
+                    st.image(
+                        song["thumbnail"],
+                        use_container_width=True
+                    )
+
+                else:
+                    st.markdown("# 🎵")
+
+                st.markdown(
+                    f"<div class='music-title'>{song['title']}</div>",
+                    unsafe_allow_html=True
+                )
+
+                st.markdown(
+                    f"<div class='music-channel'>{song.get('channel', 'Local')}</div>",
+                    unsafe_allow_html=True
+                )
+
+                # PLAY
+                if st.button(
+                    "▶️ Play",
+                    key=f"play_{idx}"
+                ):
+
+                    st.session_state.current_audio = (
+                        f"{BACKEND_URL}/stream/{quote(song['filename'])}"
+                    )
+
+                    st.session_state.current_song_name = (
+                        song["title"]
+                    )
+
+                    st.rerun()
+
+                # ADD TO PLAYLIST
+                if playlists:
+
+                    selected_playlist = st.selectbox(
+                        "Playlist",
+                        ["-"] + playlists,
+                        key=f"playlist_select_{idx}"
+                    )
+
+                    if selected_playlist != "-":
+
+                        if st.button(
+                            "➕ Add",
+                            key=f"add_{idx}"
+                        ):
+
+                            add = session.post(
+                                f"{BACKEND_URL}/playlists",
+                                json={
+                                    "playlist_name": selected_playlist,
+                                    "song_filename": song["filename"]
+                                }
+                            )
+
+                            if add.status_code == 200:
+
+                                clear_cache()
+
+                                st.success("Added")
+
+                # DELETE
+                if st.button(
+                    "🗑️ Delete",
+                    key=f"delete_{idx}"
+                ):
+
+                    delete = session.delete(
+                        f"{BACKEND_URL}/playlist/{quote(song['filename'])}"
+                    )
+
+                    if delete.status_code == 200:
+
+                        clear_cache()
+
                         st.rerun()
-                        
-        else:
-            st.error("Gagal terhubung dengan server fisik.")
-    except Exception as e:
-        st.error(f"Gagal mengambil status server: {e}")
-        
-    st.markdown("</div>", unsafe_allow_html=True)
+
+                st.markdown(
+                    "</div>",
+                    unsafe_allow_html=True
+                )
+
+# ======================================================
+# PLAYLIST
+# ======================================================
+elif menu == "📁 Playlist":
+
+    st.title("📁 Playlist")
+
+    playlists = get_playlists()
+
+    st.subheader("➕ Create Playlist")
+
+    new_playlist = st.text_input(
+        "Nama Playlist"
+    )
+
+    if st.button("Create Playlist"):
+
+        if new_playlist:
+
+            create = session.post(
+                f"{BACKEND_URL}/playlists/create",
+                json={
+                    "playlist_name": new_playlist
+                }
+            )
+
+            if create.status_code == 200:
+
+                clear_cache()
+
+                st.rerun()
+
+    st.markdown("---")
+
+    if playlists:
+
+        selected_playlist = st.selectbox(
+            "Pilih Playlist",
+            playlists
+        )
+
+        songs = get_playlist_detail(
+            selected_playlist
+        )
+
+        st.write(f"Total Lagu: {len(songs)}")
+
+        # PLAY ALL
+        if st.button("▶️ Putar Semua Lagu"):
+
+            queue = []
+            queue_names = []
+
+            for song in songs:
+
+                queue.append(
+                    f"{BACKEND_URL}/stream/{quote(song['filename'])}"
+                )
+
+                queue_names.append(
+                    song["title"]
+                )
+
+            st.session_state.playlist_queue = queue
+
+            st.session_state.playlist_queue_names = (
+                queue_names
+            )
+
+            st.session_state.playlist_index = 0
+
+            if queue:
+
+                st.session_state.current_audio = (
+                    queue[0]
+                )
+
+                st.session_state.current_song_name = (
+                    queue_names[0]
+                )
+
+            st.rerun()
+
+        # NEXT PREV
+        if st.session_state.playlist_queue:
+
+            prev_col, next_col = st.columns(2)
+
+            with prev_col:
+
+                if st.button("⏮️ Prev"):
+
+                    st.session_state.playlist_index = max(
+                        0,
+                        st.session_state.playlist_index - 1
+                    )
+
+                    st.session_state.current_audio = (
+                        st.session_state.playlist_queue[
+                            st.session_state.playlist_index
+                        ]
+                    )
+
+                    st.session_state.current_song_name = (
+                        st.session_state.playlist_queue_names[
+                            st.session_state.playlist_index
+                        ]
+                    )
+
+                    st.rerun()
+
+            with next_col:
+
+                if st.button("⏭️ Next"):
+
+                    st.session_state.playlist_index = min(
+                        len(st.session_state.playlist_queue) - 1,
+                        st.session_state.playlist_index + 1
+                    )
+
+                    st.session_state.current_audio = (
+                        st.session_state.playlist_queue[
+                            st.session_state.playlist_index
+                        ]
+                    )
+
+                    st.session_state.current_song_name = (
+                        st.session_state.playlist_queue_names[
+                            st.session_state.playlist_index
+                        ]
+                    )
+
+                    st.rerun()
+
+        st.markdown("---")
+
+        cols = st.columns(4)
+
+        for idx, song in enumerate(songs):
+
+            with cols[idx % 4]:
+
+                st.markdown(
+                    "<div class='music-card'>",
+                    unsafe_allow_html=True
+                )
+
+                if song.get("thumbnail"):
+
+                    st.image(
+                        song["thumbnail"],
+                        use_container_width=True
+                    )
+
+                st.markdown(
+                    f"<div class='music-title'>{song['title']}</div>",
+                    unsafe_allow_html=True
+                )
+
+                st.markdown(
+                    f"<div class='music-channel'>{song.get('channel', '')}</div>",
+                    unsafe_allow_html=True
+                )
+
+                if st.button(
+                    "▶️ Play",
+                    key=f"playlist_play_{idx}"
+                ):
+
+                    st.session_state.current_audio = (
+                        f"{BACKEND_URL}/stream/{quote(song['filename'])}"
+                    )
+
+                    st.session_state.current_song_name = (
+                        song["title"]
+                    )
+
+                    st.rerun()
+
+                if st.button(
+                    "❌ Remove",
+                    key=f"remove_{idx}"
+                ):
+
+                    remove = session.delete(
+                        f"{BACKEND_URL}/playlists/{selected_playlist}/{quote(song['filename'])}"
+                    )
+
+                    if remove.status_code == 200:
+
+                        clear_cache()
+
+                        st.rerun()
+
+                st.markdown(
+                    "</div>",
+                    unsafe_allow_html=True
+                )
+
+        st.markdown("---")
+
+        if st.button("🗑️ Delete Playlist"):
+
+            delete = session.delete(
+                f"{BACKEND_URL}/playlists/{selected_playlist}"
+            )
+
+            if delete.status_code == 200:
+
+                clear_cache()
+
+                st.rerun()
+
+# ======================================================
+# FOOTER
+# ======================================================
+st.markdown("---")
+
+st.caption("Optimized OfficeMusic")
