@@ -1,12 +1,18 @@
 
-import os
 import sys
+import signal
 import threading
 import subprocess
 
-DOWNLOAD_FOLDER = "music_cache"
+if sys.platform == "win32":
+    import ctypes
+else:
+    ctypes = None  # type: ignore[assignment]
+
+from app.core.constants import DOWNLOAD_FOLDER
 
 IS_WINDOWS = sys.platform == "win32"
+
 
 # =========================================================
 # PLAYER STATE
@@ -52,30 +58,14 @@ def _get_linux_player():
 # =========================================================
 # WINDOWS AUDIO API
 # =========================================================
-if IS_WINDOWS:
-
-    import ctypes
-
-    def send_mci_command(command):
-
-        try:
-
-            ctypes.windll.winmm.mciSendStringW(
-                command,
-                None,
-                0,
-                0
-            )
-
-            return True
-
-        except Exception:
-            return False
-
-else:
-
-    def send_mci_command(command):
+def send_mci_command(command: str) -> bool:
+    if not IS_WINDOWS or ctypes is None:
         return True
+    try:
+        ctypes.windll.winmm.mciSendStringW(command, None, 0, 0)  # type: ignore[union-attr]
+        return True
+    except Exception:
+        return False
 
 
 # =========================================================
@@ -86,16 +76,10 @@ def _play(song_name):
     global CURRENT_SONG
     global _linux_process
 
-    song_path = os.path.normpath(
-        os.path.abspath(
-            os.path.join(
-                DOWNLOAD_FOLDER,
-                song_name
-            )
-        )
-    )
+    song_file = DOWNLOAD_FOLDER / song_name
+    song_path = str(song_file)
 
-    if not os.path.exists(song_path):
+    if not song_file.exists():
 
         raise FileNotFoundError(
             f"Music not found: {song_path}"
@@ -278,9 +262,8 @@ def pause_music():
         # kirim SIGSTOP ke process untuk pause
         global _linux_process
         if _linux_process and _linux_process.poll() is None:
-            import signal
             try:
-                _linux_process.send_signal(signal.SIGSTOP)
+                _linux_process.send_signal(signal.SIGSTOP)  # type: ignore[attr-defined]
             except Exception:
                 pass
 
@@ -296,9 +279,8 @@ def resume_music():
     else:
         global _linux_process
         if _linux_process and _linux_process.poll() is None:
-            import signal
             try:
-                _linux_process.send_signal(signal.SIGCONT)
+                _linux_process.send_signal(signal.SIGCONT)  # type: ignore[attr-defined]
             except Exception:
                 pass
 

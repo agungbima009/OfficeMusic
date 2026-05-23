@@ -1,6 +1,4 @@
 
-import os
-
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -19,9 +17,9 @@ from app.services.playlist_service import (
     get_playlist_stream_urls
 )
 
-router = APIRouter()
+from app.core.constants import DOWNLOAD_FOLDER
 
-DOWNLOAD_FOLDER = "music_cache"
+router = APIRouter()
 
 
 # =========================================
@@ -59,12 +57,9 @@ async def stream_music(filename: str):
 
     filename = unquote(filename)
 
-    file_path = os.path.join(
-        DOWNLOAD_FOLDER,
-        filename
-    )
+    file_path = DOWNLOAD_FOLDER / filename
 
-    if not os.path.exists(file_path):
+    if not file_path.exists():
 
         return {
             "status": False,

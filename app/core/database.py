@@ -1,6 +1,5 @@
 import sqlite3
-
-DB_NAME = "office_music.db"
+from app.core.constants import DB_PATH
 
 # =========================================
 # CONNECTION
@@ -9,7 +8,7 @@ DB_NAME = "office_music.db"
 def get_connection():
 
     conn = sqlite3.connect(
-        DB_NAME,
+        str(DB_PATH),
         check_same_thread=False
     )
 
