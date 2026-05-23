@@ -1,12 +1,11 @@
-
 import os
 import sys
 import threading
-import subprocess
 
 DOWNLOAD_FOLDER = "music_cache"
 
-IS_WINDOWS = sys.platform == "win32"
+IS_WINDOWS = sys.platform.startswith("win")
+IS_LINUX = sys.platform.startswith("linux")
 
 # =========================================================
 # PLAYER STATE
@@ -18,36 +17,6 @@ PLAYLIST_QUEUE = []
 QUEUE_INDEX = 0
 
 PLAYER_LOCK = threading.Lock()
-
-# =========================================================
-# LINUX: subprocess-based player (mpg123 / ffplay)
-# =========================================================
-_linux_process = None  # holds the subprocess for Linux playback
-
-
-def _kill_linux_process():
-    global _linux_process
-    if _linux_process and _linux_process.poll() is None:
-        _linux_process.terminate()
-        try:
-            _linux_process.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            _linux_process.kill()
-    _linux_process = None
-
-
-def _get_linux_player():
-    """Return the first available command-line audio player."""
-    for player in ["mpg123", "ffplay", "aplay", "cvlc"]:
-        result = subprocess.run(
-            ["which", player],
-            capture_output=True,
-            text=True
-        )
-        if result.returncode == 0:
-            return player
-    return None
-
 
 # =========================================================
 # WINDOWS AUDIO API
@@ -84,7 +53,6 @@ else:
 def _play(song_name):
 
     global CURRENT_SONG
-    global _linux_process
 
     song_path = os.path.normpath(
         os.path.abspath(
@@ -101,6 +69,9 @@ def _play(song_name):
             f"Music not found: {song_path}"
         )
 
+    # =====================================================
+    # WINDOWS LOCAL PLAYBACK
+    # =====================================================
     if IS_WINDOWS:
 
         send_mci_command("stop myg")
@@ -121,46 +92,19 @@ def _play(song_name):
 
             CURRENT_SONG = None
 
+    # =====================================================
+    # LINUX / VPS MODE
+    # =====================================================
     else:
-        # -------------------------------------------------------
-        # Linux / VPS: gunakan mpg123 atau ffplay
-        # -------------------------------------------------------
-        _kill_linux_process()
 
-        player = _get_linux_player()
-
-        if player is None:
-            # Tidak ada audio player tersedia di server
-            # Tetap simpan state agar API bisa tracking lagu
-            CURRENT_SONG = song_name
-            print(
-                f"[WARNING] Tidak ada audio player (mpg123/ffplay) di server. "
-                f"Install dengan: sudo apt install mpg123"
-            )
-            return CURRENT_SONG
-
-        if player == "mpg123":
-            cmd = ["mpg123", "-q", song_path]
-
-        elif player == "ffplay":
-            cmd = [
-                "ffplay", "-nodisp", "-autoexit",
-                "-loglevel", "quiet", song_path
-            ]
-
-        elif player == "cvlc":
-            cmd = ["cvlc", "--play-and-exit", song_path]
-
-        else:
-            cmd = [player, song_path]
-
-        _linux_process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
+        # VPS tidak memutar audio
+        # hanya update state player
 
         CURRENT_SONG = song_name
+
+        print(
+            f"[LINUX MODE] Current song: {song_name}"
+        )
 
     return CURRENT_SONG
 
@@ -258,11 +202,9 @@ def stop_music():
 
             send_mci_command("close myg")
 
-        else:
-
-            _kill_linux_process()
-
         CURRENT_SONG = None
+
+    return CURRENT_SONG
 
 
 # =========================================================
@@ -271,18 +213,10 @@ def stop_music():
 def pause_music():
 
     if IS_WINDOWS:
+
         send_mci_command("pause myg")
 
-    else:
-        # mpg123 / ffplay tidak mendukung pause via signal standar,
-        # kirim SIGSTOP ke process untuk pause
-        global _linux_process
-        if _linux_process and _linux_process.poll() is None:
-            import signal
-            try:
-                _linux_process.send_signal(signal.SIGSTOP)
-            except Exception:
-                pass
+    return CURRENT_SONG
 
 
 # =========================================================
@@ -291,16 +225,10 @@ def pause_music():
 def resume_music():
 
     if IS_WINDOWS:
+
         send_mci_command("resume myg")
 
-    else:
-        global _linux_process
-        if _linux_process and _linux_process.poll() is None:
-            import signal
-            try:
-                _linux_process.send_signal(signal.SIGCONT)
-            except Exception:
-                pass
+    return CURRENT_SONG
 
 
 # =========================================================
@@ -309,3 +237,19 @@ def resume_music():
 def current_song():
 
     return CURRENT_SONG
+
+
+# =========================================================
+# CURRENT PLAYLIST
+# =========================================================
+def current_playlist():
+
+    return PLAYLIST_QUEUE
+
+
+# =========================================================
+# CURRENT INDEX
+# =========================================================
+def current_index():
+
+    return QUEUE_INDEX
