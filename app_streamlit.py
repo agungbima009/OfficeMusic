@@ -6,6 +6,7 @@ from urllib.parse import quote
 import requests
 import streamlit as st
 from dotenv import load_dotenv
+from streamlit.components.v1 import html
 
 # ======================================================
 # LOAD ENV
@@ -31,7 +32,7 @@ st.set_page_config(
 )
 
 # ======================================================
-# SESSION
+# SESSION POOL
 # ======================================================
 @st.cache_resource
 def get_session():
@@ -68,10 +69,10 @@ def get_songs() -> List[Dict]:
         if r.status_code == 200:
             return r.json().get("songs", [])
 
-    except Exception:
-        pass
+        return []
 
-    return []
+    except Exception:
+        return []
 
 
 @st.cache_data(ttl=60)
@@ -87,10 +88,10 @@ def get_playlists():
         if r.status_code == 200:
             return r.json().get("playlists", [])
 
-    except Exception:
-        pass
+        return []
 
-    return []
+    except Exception:
+        return []
 
 
 @st.cache_data(ttl=60)
@@ -106,32 +107,14 @@ def get_playlist_detail(name):
         if r.status_code == 200:
             return r.json().get("songs", [])
 
-    except Exception:
-        pass
+        return []
 
-    return []
+    except Exception:
+        return []
 
 
 def clear_cache():
     st.cache_data.clear()
-
-# ======================================================
-# PLAYER SESSION STATE
-# ======================================================
-if "current_audio" not in st.session_state:
-    st.session_state.current_audio = None
-
-if "current_song_name" not in st.session_state:
-    st.session_state.current_song_name = None
-
-if "playlist_queue" not in st.session_state:
-    st.session_state.playlist_queue = []
-
-if "playlist_queue_names" not in st.session_state:
-    st.session_state.playlist_queue_names = []
-
-if "playlist_index" not in st.session_state:
-    st.session_state.playlist_index = 0
 
 # ======================================================
 # CSS
@@ -147,6 +130,7 @@ st.markdown("""
     text-align:center;
     font-size:3rem;
     font-weight:800;
+    margin-bottom:0;
 }
 
 .sub-title{
@@ -161,11 +145,20 @@ st.markdown("""
     border-radius:18px;
     padding:15px;
     margin-bottom:20px;
+    transition:0.2s;
+    height:100%;
+}
+
+.music-card:hover{
+    transform:translateY(-4px);
+    border-color:#7C3AED;
 }
 
 .music-title{
     font-weight:700;
     margin-top:10px;
+    line-height:1.3;
+    font-size:0.95rem;
     min-height:55px;
 }
 
@@ -192,7 +185,7 @@ st.markdown(
 )
 
 st.markdown(
-    "<div class='sub-title'>Modern Music Streaming</div>",
+    "<div class='sub-title'>Modern Local Music Streaming</div>",
     unsafe_allow_html=True
 )
 
@@ -203,16 +196,15 @@ try:
 
     health = session.get(
         BACKEND_URL,
-        timeout=5
+        timeout=3
     )
 
     if health.status_code != 200:
         st.error("Backend Offline")
         st.stop()
 
-except Exception as e:
-
-    st.error(f"Backend Error: {e}")
+except Exception:
+    st.error("Backend Offline")
     st.stop()
 
 # ======================================================
@@ -223,6 +215,7 @@ st.sidebar.title("📂 Menu")
 menu = st.sidebar.radio(
     "Navigation",
     [
+        "🔍 Cari Musik",
         "🎵 Library",
         "📁 Playlist"
     ]
@@ -232,7 +225,25 @@ if st.sidebar.button("♻️ Refresh Cache"):
 
     clear_cache()
 
-    st.toast("Cache refreshed")
+    st.toast("Cache Refreshed")
+
+# ======================================================
+# PLAYER STATE
+# ======================================================
+if "current_audio" not in st.session_state:
+    st.session_state.current_audio = None
+
+if "current_song_name" not in st.session_state:
+    st.session_state.current_song_name = None
+
+if "playlist_queue" not in st.session_state:
+    st.session_state.playlist_queue = []
+
+if "playlist_queue_names" not in st.session_state:
+    st.session_state.playlist_queue_names = []
+
+if "playlist_index" not in st.session_state:
+    st.session_state.playlist_index = 0
 
 # ======================================================
 # SIDEBAR PLAYER
@@ -245,12 +256,22 @@ with st.sidebar:
 
     if st.session_state.current_audio:
 
-        st.write(
-            f"**{st.session_state.current_song_name}**"
+        current_name = (
+            st.session_state.current_song_name
+            or "Unknown Music"
         )
 
+        audio_url = st.session_state.current_audio
+
+        unique_audio_url = (
+            f"{audio_url}?v="
+            f"{st.session_state.playlist_index}"
+        )
+
+        st.write(f"**{current_name}**")
+
         st.audio(
-            st.session_state.current_audio,
+            unique_audio_url,
             format="audio/mp3"
         )
 
@@ -259,9 +280,85 @@ with st.sidebar:
         st.info("Belum ada musik diputar")
 
 # ======================================================
+# SEARCH MUSIC
+# ======================================================
+if menu == "🔍 Cari Musik":
+
+    st.title("🔍 Cari Musik")
+
+    query = st.text_input(
+        "Cari Lagu",
+        placeholder="Coldplay - Yellow"
+    )
+
+    if query:
+
+        with st.spinner("Searching..."):
+
+            r = session.post(
+                f"{BACKEND_URL}/youtube/search",
+                json={"query": query},
+                timeout=30
+            )
+
+        if r.status_code == 200:
+
+            results = r.json().get("results", [])
+
+            cols = st.columns(4)
+
+            for idx, item in enumerate(results):
+
+                with cols[idx % 4]:
+
+                    st.markdown(
+                        "<div class='music-card'>",
+                        unsafe_allow_html=True
+                    )
+
+                    st.image(
+                        item["thumbnail"],
+                        use_container_width=True
+                    )
+
+                    st.markdown(
+                        f"<div class='music-title'>{item['title']}</div>",
+                        unsafe_allow_html=True
+                    )
+
+                    st.markdown(
+                        f"<div class='music-channel'>{item['channel']}</div>",
+                        unsafe_allow_html=True
+                    )
+
+                    if st.button(
+                        "📥 Download",
+                        key=f"download_{idx}"
+                    ):
+
+                        with st.spinner("Downloading..."):
+
+                            dl = session.post(
+                                f"{BACKEND_URL}/youtube/download-audio",
+                                json=item,
+                                timeout=120
+                            )
+
+                        if dl.status_code == 200:
+
+                            clear_cache()
+
+                            st.success("Downloaded")
+
+                    st.markdown(
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+
+# ======================================================
 # LIBRARY
 # ======================================================
-if menu == "🎵 Library":
+elif menu == "🎵 Library":
 
     st.title("🎵 Library")
 
@@ -274,19 +371,18 @@ if menu == "🎵 Library":
     else:
 
         search = st.text_input(
-            "Cari lagu"
+            "Filter Lagu",
+            placeholder="Cari lagu..."
         ).lower()
 
         filtered = []
 
         for song in songs:
 
-            title = song.get(
+            if search in song.get(
                 "title",
                 ""
-            ).lower()
-
-            if search in title:
+            ).lower():
 
                 filtered.append(song)
 
@@ -310,6 +406,8 @@ if menu == "🎵 Library":
 
         cols = st.columns(4)
 
+        playlists = get_playlists()
+
         for idx, song in enumerate(page_songs):
 
             with cols[idx % 4]:
@@ -326,6 +424,9 @@ if menu == "🎵 Library":
                         use_container_width=True
                     )
 
+                else:
+                    st.markdown("# 🎵")
+
                 st.markdown(
                     f"<div class='music-title'>{song['title']}</div>",
                     unsafe_allow_html=True
@@ -336,19 +437,20 @@ if menu == "🎵 Library":
                     unsafe_allow_html=True
                 )
 
+                # PLAY
                 if st.button(
                     "▶️ Play",
                     key=f"play_{idx}"
                 ):
 
-                    audio_url = (
+                    stream_url = (
                         f"{BACKEND_URL}"
                         f"/player/stream/"
                         f"{quote(song['filename'])}"
                     )
 
                     st.session_state.current_audio = (
-                        audio_url
+                        stream_url
                     )
 
                     st.session_state.current_song_name = (
@@ -356,6 +458,52 @@ if menu == "🎵 Library":
                     )
 
                     st.rerun()
+
+                # ADD TO PLAYLIST
+                if playlists:
+
+                    selected_playlist = st.selectbox(
+                        "Playlist",
+                        ["-"] + playlists,
+                        key=f"playlist_select_{idx}"
+                    )
+
+                    if selected_playlist != "-":
+
+                        if st.button(
+                            "➕ Add",
+                            key=f"add_{idx}"
+                        ):
+
+                            add = session.post(
+                                f"{BACKEND_URL}/playlists",
+                                json={
+                                    "playlist_name": selected_playlist,
+                                    "song_filename": song["filename"]
+                                }
+                            )
+
+                            if add.status_code == 200:
+
+                                clear_cache()
+
+                                st.success("Added")
+
+                # DELETE
+                if st.button(
+                    "🗑️ Delete",
+                    key=f"delete_{idx}"
+                ):
+
+                    delete = session.delete(
+                        f"{BACKEND_URL}/playlist/{quote(song['filename'])}"
+                    )
+
+                    if delete.status_code == 200:
+
+                        clear_cache()
+
+                        st.rerun()
 
                 st.markdown(
                     "</div>",
@@ -371,11 +519,32 @@ elif menu == "📁 Playlist":
 
     playlists = get_playlists()
 
-    if not playlists:
+    st.subheader("➕ Create Playlist")
 
-        st.info("Belum ada playlist")
+    new_playlist = st.text_input(
+        "Nama Playlist"
+    )
 
-    else:
+    if st.button("Create Playlist"):
+
+        if new_playlist:
+
+            create = session.post(
+                f"{BACKEND_URL}/playlists/create",
+                json={
+                    "playlist_name": new_playlist
+                }
+            )
+
+            if create.status_code == 200:
+
+                clear_cache()
+
+                st.rerun()
+
+    st.markdown("---")
+
+    if playlists:
 
         selected_playlist = st.selectbox(
             "Pilih Playlist",
@@ -388,7 +557,8 @@ elif menu == "📁 Playlist":
 
         st.write(f"Total Lagu: {len(songs)}")
 
-        if st.button("▶️ Putar Semua"):
+        # PLAY ALL
+        if st.button("▶️ Putar Semua Lagu"):
 
             queue = []
             queue_names = []
@@ -425,6 +595,7 @@ elif menu == "📁 Playlist":
 
             st.rerun()
 
+        # NEXT PREV
         if st.session_state.playlist_queue:
 
             prev_col, next_col = st.columns(2)
@@ -471,9 +642,94 @@ elif menu == "📁 Playlist":
 
                     st.rerun()
 
+        st.markdown("---")
+
+        cols = st.columns(4)
+
+        for idx, song in enumerate(songs):
+
+            with cols[idx % 4]:
+
+                st.markdown(
+                    "<div class='music-card'>",
+                    unsafe_allow_html=True
+                )
+
+                if song.get("thumbnail"):
+
+                    st.image(
+                        song["thumbnail"],
+                        use_container_width=True
+                    )
+
+                st.markdown(
+                    f"<div class='music-title'>{song['title']}</div>",
+                    unsafe_allow_html=True
+                )
+
+                st.markdown(
+                    f"<div class='music-channel'>{song.get('channel', '')}</div>",
+                    unsafe_allow_html=True
+                )
+
+                if st.button(
+                    "▶️ Play",
+                    key=f"playlist_play_{idx}"
+                ):
+
+                    stream_url = (
+                        f"{BACKEND_URL}"
+                        f"/player/stream/"
+                        f"{quote(song['filename'])}"
+                    )
+
+                    st.session_state.current_audio = (
+                        stream_url
+                    )
+
+                    st.session_state.current_song_name = (
+                        song["title"]
+                    )
+
+                    st.rerun()
+
+                if st.button(
+                    "❌ Remove",
+                    key=f"remove_{idx}"
+                ):
+
+                    remove = session.delete(
+                        f"{BACKEND_URL}/playlists/{selected_playlist}/{quote(song['filename'])}"
+                    )
+
+                    if remove.status_code == 200:
+
+                        clear_cache()
+
+                        st.rerun()
+
+                st.markdown(
+                    "</div>",
+                    unsafe_allow_html=True
+                )
+
+        st.markdown("---")
+
+        if st.button("🗑️ Delete Playlist"):
+
+            delete = session.delete(
+                f"{BACKEND_URL}/playlists/{selected_playlist}"
+            )
+
+            if delete.status_code == 200:
+
+                clear_cache()
+
+                st.rerun()
+
 # ======================================================
 # FOOTER
 # ======================================================
 st.markdown("---")
 
-st.caption("OfficeMusic Debian 13 VPS Optimized")
+st.caption("Optimized OfficeMusic For Debian 13 VPS")
