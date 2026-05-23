@@ -2,6 +2,7 @@
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+import html as html_lib
 from urllib.parse import unquote
 
 from app.services.playlist_service import (
@@ -55,7 +56,9 @@ def playlist():
 @router.get("/stream/{filename:path}")
 async def stream_music(filename: str):
 
-    filename = unquote(filename)
+    # unquote: decode %XX encoding (URL decode)
+    # html_lib.unescape: decode &amp; -> & dll (HTML entity decode)
+    filename = html_lib.unescape(unquote(filename))
 
     file_path = DOWNLOAD_FOLDER / filename
 

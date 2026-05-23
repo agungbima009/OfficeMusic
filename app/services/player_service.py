@@ -1,7 +1,5 @@
 
-import os
 import sys
-import signal
 import threading
 
 if sys.platform == "win32":
@@ -200,16 +198,7 @@ def pause_music():
 
         send_mci_command("pause myg")
 
-    else:
-        # mpg123 / ffplay tidak mendukung pause via signal standar,
-        # kirim SIGSTOP ke process untuk pause
-        global _linux_process
-        if _linux_process and _linux_process.poll() is None:
-            import signal
-            try:
-                _linux_process.send_signal(signal.SIGSTOP)
-            except Exception:
-                pass
+    # Linux mode: state-only, tidak ada subprocess yang perlu di-pause
 
 
 # =========================================================
@@ -221,14 +210,7 @@ def resume_music():
 
         send_mci_command("resume myg")
 
-    else:
-        global _linux_process
-        if _linux_process and _linux_process.poll() is None:
-            import signal
-            try:
-                _linux_process.send_signal(signal.SIGCONT)
-            except Exception:
-                pass
+    # Linux mode: state-only, tidak ada subprocess yang perlu di-resume
 
 
 # =========================================================
