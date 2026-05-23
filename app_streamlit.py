@@ -1,4 +1,3 @@
-
 import os
 from math import ceil
 from typing import Dict, List
@@ -16,7 +15,12 @@ load_dotenv()
 
 BACKEND_URL = os.getenv(
     "BACKEND_URL",
+    ""
 ).rstrip("/")
+
+if not BACKEND_URL:
+    st.error("BACKEND_URL belum diset")
+    st.stop()
 
 # ======================================================
 # PAGE CONFIG
@@ -96,7 +100,7 @@ def get_playlist_detail(name):
     try:
 
         r = session.get(
-            f"{BACKEND_URL}/playlists/{name}",
+            f"{BACKEND_URL}/playlists/{quote(name)}",
             timeout=10
         )
 
@@ -241,7 +245,6 @@ if "playlist_queue_names" not in st.session_state:
 if "playlist_index" not in st.session_state:
     st.session_state.playlist_index = 0
 
-
 # ======================================================
 # SIDEBAR PLAYER
 # ======================================================
@@ -261,81 +264,20 @@ with st.sidebar:
         audio_url = st.session_state.current_audio
 
         unique_audio_url = (
-            f"{audio_url}?t="
+            f"{audio_url}?v="
             f"{st.session_state.playlist_index}"
         )
 
-        player_html = f"""
-        <div style="
-            background: linear-gradient(
-                135deg,
-                rgba(124,58,237,0.18),
-                rgba(59,130,246,0.12)
-            );
+        st.write(f"**{current_name}**")
 
-            border:1px solid rgba(124,58,237,0.3);
-
-            padding:15px;
-
-            border-radius:16px;
-
-            margin-bottom:15px;
-        ">
-
-            <div style="
-                color:#A78BFA;
-                font-size:0.75rem;
-                font-weight:700;
-                letter-spacing:1px;
-                margin-bottom:10px;
-            ">
-                🎧 NOW PLAYING
-            </div>
-
-            <div style="
-                color:white;
-                font-size:0.95rem;
-                font-weight:700;
-                margin-bottom:15px;
-                line-height:1.4;
-
-                overflow:hidden;
-
-                display:-webkit-box;
-
-                -webkit-line-clamp:3;
-
-                -webkit-box-orient:vertical;
-            ">
-                {current_name}
-            </div>
-
-            <audio
-                controls
-                autoplay
-                style="
-                    width:100%;
-                    height:40px;
-                "
-            >
-                <source
-                    src="{unique_audio_url}"
-                    type="audio/mpeg"
-                >
-            </audio>
-
-        </div>
-        """
-
-        html(
-            player_html,
-            height=180
+        st.audio(
+            unique_audio_url,
+            format="audio/mp3"
         )
 
     else:
 
         st.info("Belum ada musik diputar")
-
 
 # ======================================================
 # SEARCH MUSIC
@@ -501,8 +443,14 @@ elif menu == "🎵 Library":
                     key=f"play_{idx}"
                 ):
 
+                    stream_url = (
+                        f"{BACKEND_URL}"
+                        f"/player/stream/"
+                        f"{quote(song['filename'])}"
+                    )
+
                     st.session_state.current_audio = (
-                        f"{BACKEND_URL}/stream/{quote(song['filename'])}"
+                        stream_url
                     )
 
                     st.session_state.current_song_name = (
@@ -618,7 +566,9 @@ elif menu == "📁 Playlist":
             for song in songs:
 
                 queue.append(
-                    f"{BACKEND_URL}/stream/{quote(song['filename'])}"
+                    f"{BACKEND_URL}"
+                    f"/player/stream/"
+                    f"{quote(song['filename'])}"
                 )
 
                 queue_names.append(
@@ -659,16 +609,14 @@ elif menu == "📁 Playlist":
                         st.session_state.playlist_index - 1
                     )
 
+                    idx = st.session_state.playlist_index
+
                     st.session_state.current_audio = (
-                        st.session_state.playlist_queue[
-                            st.session_state.playlist_index
-                        ]
+                        st.session_state.playlist_queue[idx]
                     )
 
                     st.session_state.current_song_name = (
-                        st.session_state.playlist_queue_names[
-                            st.session_state.playlist_index
-                        ]
+                        st.session_state.playlist_queue_names[idx]
                     )
 
                     st.rerun()
@@ -682,16 +630,14 @@ elif menu == "📁 Playlist":
                         st.session_state.playlist_index + 1
                     )
 
+                    idx = st.session_state.playlist_index
+
                     st.session_state.current_audio = (
-                        st.session_state.playlist_queue[
-                            st.session_state.playlist_index
-                        ]
+                        st.session_state.playlist_queue[idx]
                     )
 
                     st.session_state.current_song_name = (
-                        st.session_state.playlist_queue_names[
-                            st.session_state.playlist_index
-                        ]
+                        st.session_state.playlist_queue_names[idx]
                     )
 
                     st.rerun()
@@ -731,8 +677,14 @@ elif menu == "📁 Playlist":
                     key=f"playlist_play_{idx}"
                 ):
 
+                    stream_url = (
+                        f"{BACKEND_URL}"
+                        f"/player/stream/"
+                        f"{quote(song['filename'])}"
+                    )
+
                     st.session_state.current_audio = (
-                        f"{BACKEND_URL}/stream/{quote(song['filename'])}"
+                        stream_url
                     )
 
                     st.session_state.current_song_name = (
@@ -780,4 +732,4 @@ elif menu == "📁 Playlist":
 # ======================================================
 st.markdown("---")
 
-st.caption("Optimized OfficeMusic")
+st.caption("Optimized OfficeMusic For Debian 13 VPS")

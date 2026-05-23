@@ -1,5 +1,7 @@
+import os
 
 from fastapi import APIRouter
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.services.player_service import (
@@ -14,6 +16,8 @@ from app.services.player_service import (
 )
 
 router = APIRouter()
+
+DOWNLOAD_FOLDER = "music_cache"
 
 
 # =========================================================
@@ -33,7 +37,8 @@ def play(song_name: str):
 
     return {
         "status": True,
-        "current_song": current
+        "current_song": current,
+        "stream_url": f"/player/stream/{song_name}"
     }
 
 
@@ -49,7 +54,11 @@ def play_playlist(data: PlaylistRequest):
 
     return {
         "status": True,
-        "current_song": current
+        "current_song": current,
+        "stream_url": (
+            f"/player/stream/{current}"
+            if current else None
+        )
     }
 
 
@@ -63,7 +72,11 @@ def next_music():
 
     return {
         "status": True,
-        "current_song": current
+        "current_song": current,
+        "stream_url": (
+            f"/player/stream/{current}"
+            if current else None
+        )
     }
 
 
@@ -77,7 +90,11 @@ def previous_music():
 
     return {
         "status": True,
-        "current_song": current
+        "current_song": current,
+        "stream_url": (
+            f"/player/stream/{current}"
+            if current else None
+        )
     }
 
 
@@ -126,8 +143,38 @@ def resume():
 @router.get("/current")
 def current():
 
+    song = current_song()
+
     return {
         "status": True,
-        "current_song": current_song()
+        "current_song": song,
+        "stream_url": (
+            f"/player/stream/{song}"
+            if song else None
+        )
     }
 
+
+# =========================================================
+# STREAM AUDIO
+# =========================================================
+@router.get("/stream/{song_name}")
+def stream(song_name: str):
+
+    song_path = os.path.join(
+        DOWNLOAD_FOLDER,
+        song_name
+    )
+
+    if not os.path.exists(song_path):
+
+        return {
+            "status": False,
+            "message": "Music not found"
+        }
+
+    return FileResponse(
+        path=song_path,
+        media_type="audio/mpeg",
+        filename=song_name
+    )
