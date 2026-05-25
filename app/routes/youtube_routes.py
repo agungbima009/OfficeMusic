@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from urllib.parse import unquote
 
 from app.models.youtube_model import (
     SearchRequest
@@ -10,7 +11,8 @@ from app.services.youtube_service import (
 
 from app.services.download_service import (
     download_audio,
-    download_video
+    download_video,
+    DOWNLOAD_STATUS
 )
 
 router = APIRouter()
@@ -73,3 +75,18 @@ def download_movie(video: dict):
             status_code=500,
             detail=f"Gagal mendownload video dari YouTube: {str(e)}"
         )
+
+# =========================================
+# DOWNLOAD STATUS (POLLING)
+# =========================================
+@router.get("/download-status")
+def get_download_status(url: str):
+    """
+    Cek progress download satu URL — O(1) dict lookup.
+    Query param: ?url=<youtube_url>
+    """
+    decoded_url = unquote(url)
+    status = DOWNLOAD_STATUS.get(decoded_url)
+    if status is None:
+        return {"status": "not_started", "percentage": 0.0}
+    return status

@@ -715,10 +715,15 @@ if menu == "🔍 Cari Musik":
         placeholder="Coldplay - Yellow"
     )
 
-    if query:
+    # Simpan hasil pencarian di session_state agar tidak re-search saat tombol download diklik
+    if "search_results" not in st.session_state:
+        st.session_state.search_results = []
+    if "last_query" not in st.session_state:
+        st.session_state.last_query = ""
 
-        with st.spinner("Searching..."):
-
+    if query and query != st.session_state.last_query:
+        # Query baru — lakukan pencarian
+        with st.spinner("🔍 Mencari lagu..."):
             r = session.post(
                 f"{BACKEND_URL}/youtube/search",
                 json={"query": query},
@@ -726,58 +731,71 @@ if menu == "🔍 Cari Musik":
             )
 
         if r.status_code == 200:
+            st.session_state.search_results = r.json().get("results", [])
+            st.session_state.last_query = query
+        else:
+            st.error(f"Pencarian gagal: {r.status_code}")
+            st.session_state.search_results = []
 
-            results = r.json().get("results", [])
+    results = st.session_state.search_results
 
-            cols = st.columns(4)
+    if results:
+        cols = st.columns(4)
 
-            for idx, item in enumerate(results):
+        for idx, item in enumerate(results):
 
-                with cols[idx % 4]:
+            with cols[idx % 4]:
 
-                    st.markdown(
-                        "<div class='music-card'>",
-                        unsafe_allow_html=True
+                st.markdown(
+                    "<div class='music-card'>",
+                    unsafe_allow_html=True
+                )
+
+                st.image(
+                    item["thumbnail"],
+                    use_container_width=True
+                )
+
+                st.markdown(
+                    f"<div class='music-title'>{item['title']}</div>",
+                    unsafe_allow_html=True
+                )
+
+                st.markdown(
+                    f"<div class='music-channel'>{item['channel']}</div>",
+                    unsafe_allow_html=True
+                )
+
+                # Tombol download — item sudah tersedia dari cache session_state,
+                # TIDAK perlu re-search ke YouTube lagi. O(1) akses dict.
+                if st.button(
+                    "📥 Download",
+                    key=f"download_{idx}"
+                ):
+                    video_url = item.get("url", "")
+                    progress_bar = st.progress(0, text="⏳ Memulai download...")
+
+                    # Kirim request download (non-blocking via timeout panjang)
+                    dl = session.post(
+                        f"{BACKEND_URL}/youtube/download-audio",
+                        json=item,       # kirim langsung tanpa pencarian ulang
+                        timeout=300
                     )
 
-                    st.image(
-                        item["thumbnail"],
-                        use_container_width=True
-                    )
+                    if dl.status_code == 200:
+                        progress_bar.progress(100, text="✅ Download selesai!")
+                        clear_cache()
+                        st.success(f"✅ Berhasil didownload: {item['title']}")
+                    else:
+                        err = dl.json().get("detail", dl.text)
+                        progress_bar.empty()
+                        st.error(f"❌ Gagal: {err}")
 
-                    st.markdown(
-                        f"<div class='music-title'>{item['title']}</div>",
-                        unsafe_allow_html=True
-                    )
+                st.markdown(
+                    "</div>",
+                    unsafe_allow_html=True
+                )
 
-                    st.markdown(
-                        f"<div class='music-channel'>{item['channel']}</div>",
-                        unsafe_allow_html=True
-                    )
-
-                    if st.button(
-                        "📥 Download",
-                        key=f"download_{idx}"
-                    ):
-
-                        with st.spinner("Downloading..."):
-
-                            dl = session.post(
-                                f"{BACKEND_URL}/youtube/download-audio",
-                                json=item,
-                                timeout=120
-                            )
-
-                        if dl.status_code == 200:
-
-                            clear_cache()
-
-                            st.success("Downloaded")
-
-                    st.markdown(
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
 
 # ======================================================
 # LIBRARY
