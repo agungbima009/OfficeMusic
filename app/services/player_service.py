@@ -1,5 +1,6 @@
 
 import os
+import time
 import sys
 import threading
 
@@ -235,3 +236,43 @@ def current_playlist():
 def current_index():
 
     return QUEUE_INDEX
+
+
+# =========================================================
+# BACKGROUND PLAYBACK MONITOR (FOR WINDOWS MCI)
+# =========================================================
+def monitor_playback():
+    global QUEUE_INDEX, PLAYLIST_QUEUE, CURRENT_SONG
+    while True:
+        try:
+            time.sleep(1)
+            if not IS_WINDOWS:
+                continue
+                
+            if not CURRENT_SONG:
+                continue
+                
+            buffer = ctypes.create_unicode_buffer(64)
+            res = ctypes.windll.winmm.mciSendStringW("status myg mode", buffer, 64, 0)
+            if res != 0:
+                mode = "stopped"
+            else:
+                mode = buffer.value.strip().lower()
+                
+            if mode in ["stopped", ""]:
+                with PLAYER_LOCK:
+                    if PLAYLIST_QUEUE and CURRENT_SONG:
+                        QUEUE_INDEX += 1
+                        if QUEUE_INDEX < len(PLAYLIST_QUEUE):
+                            _play(PLAYLIST_QUEUE[QUEUE_INDEX])
+                        else:
+                            # Selesai memutar semua lagu di queue
+                            CURRENT_SONG = None
+                            PLAYLIST_QUEUE = []
+                            QUEUE_INDEX = 0
+        except Exception:
+            pass
+
+if IS_WINDOWS:
+    monitor_thread = threading.Thread(target=monitor_playback, daemon=True)
+    monitor_thread.start()

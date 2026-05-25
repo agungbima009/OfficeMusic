@@ -254,30 +254,453 @@ with st.sidebar:
 
     st.markdown("## 🎧 Player")
 
-    if st.session_state.current_audio:
+    if st.session_state.playlist_queue:
+        import json
 
-        current_name = (
-            st.session_state.current_song_name
-            or "Unknown Music"
-        )
+        queue_json = json.dumps(st.session_state.playlist_queue)
+        names_json = json.dumps(st.session_state.playlist_queue_names)
+        current_idx = st.session_state.playlist_index
 
-        audio_url = st.session_state.current_audio
+        player_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+            <style>
+                body {{
+                    margin: 0;
+                    padding: 0;
+                    background: transparent;
+                    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+                    color: #F3F4F6;
+                    overflow: hidden;
+                }}
+                
+                .player-card {{
+                    background: linear-gradient(135deg, rgba(31, 41, 55, 0.7), rgba(17, 24, 39, 0.9));
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 20px;
+                    padding: 20px;
+                    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+                    backdrop-filter: blur(12px);
+                    max-width: 100%;
+                    box-sizing: border-box;
+                }}
 
-        unique_audio_url = (
-            f"{audio_url}?v="
-            f"{st.session_state.playlist_index}"
-        )
+                .now-playing-label {{
+                    font-size: 0.75rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.15em;
+                    color: #A78BFA;
+                    font-weight: 700;
+                    margin-bottom: 12px;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }}
 
-        st.write(f"**{current_name}**")
+                .pulse-dot {{
+                    width: 6px;
+                    height: 6px;
+                    background-color: #A78BFA;
+                    border-radius: 50%;
+                    animation: pulse 1.5s infinite alternate;
+                }}
 
-        st.audio(
-            unique_audio_url,
-            format="audio/mp3",
-            autoplay=True
-        )
+                @keyframes pulse {{
+                    0% {{ transform: scale(0.8); opacity: 0.5; }}
+                    100% {{ transform: scale(1.3); opacity: 1; }}
+                }}
+
+                .track-info {{
+                    margin-bottom: 16px;
+                    overflow: hidden;
+                    position: relative;
+                }}
+
+                .track-title {{
+                    font-size: 1.05rem;
+                    font-weight: 700;
+                    margin-bottom: 4px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }}
+
+                .track-queue {{
+                    font-size: 0.75rem;
+                    color: #9CA3AF;
+                    font-weight: 500;
+                }}
+
+                .visualizer {{
+                    display: flex;
+                    align-items: flex-end;
+                    justify-content: center;
+                    gap: 3px;
+                    height: 35px;
+                    margin: 15px 0;
+                }}
+
+                .bar {{
+                    width: 4px;
+                    height: 5px;
+                    background: linear-gradient(to top, #7C3AED, #A78BFA);
+                    border-radius: 2px;
+                    transition: height 0.2s ease;
+                }}
+
+                .bar.active {{
+                    animation: bounce 1s ease-in-out infinite alternate;
+                }}
+
+                @keyframes bounce {{
+                    0% {{ height: 5px; }}
+                    100% {{ height: 35px; }}
+                }}
+
+                .bar:nth-child(1) {{ animation-delay: 0.1s; }}
+                .bar:nth-child(2) {{ animation-delay: 0.3s; }}
+                .bar:nth-child(3) {{ animation-delay: 0.5s; }}
+                .bar:nth-child(4) {{ animation-delay: 0.2s; }}
+                .bar:nth-child(5) {{ animation-delay: 0.4s; }}
+                .bar:nth-child(6) {{ animation-delay: 0.6s; }}
+                .bar:nth-child(7) {{ animation-delay: 0.15s; }}
+                .bar:nth-child(8) {{ animation-delay: 0.35s; }}
+
+                .progress-container {{
+                    margin-bottom: 20px;
+                }}
+
+                .time-slider {{
+                    -webkit-appearance: none;
+                    width: 100%;
+                    height: 5px;
+                    border-radius: 3px;
+                    background: rgba(255, 255, 255, 0.15);
+                    outline: none;
+                    cursor: pointer;
+                    margin-bottom: 8px;
+                    transition: background 0.2s;
+                }}
+
+                .time-slider:hover {{
+                    background: rgba(255, 255, 255, 0.25);
+                }}
+
+                .time-slider::-webkit-slider-thumb {{
+                    -webkit-appearance: none;
+                    appearance: none;
+                    width: 12px;
+                    height: 12px;
+                    border-radius: 50%;
+                    background: #A78BFA;
+                    cursor: pointer;
+                    transition: transform 0.1s;
+                }}
+
+                .time-slider::-webkit-slider-thumb:hover {{
+                    transform: scale(1.3);
+                }}
+
+                .time-display {{
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 0.75rem;
+                    color: #9CA3AF;
+                    font-weight: 500;
+                }}
+
+                .controls {{
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 20px;
+                }}
+
+                .control-btn {{
+                    background: none;
+                    border: none;
+                    color: #D1D5DB;
+                    font-size: 1.25rem;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 38px;
+                    height: 38px;
+                    border-radius: 50%;
+                }}
+
+                .control-btn:hover {{
+                    color: #FFF;
+                    background: rgba(255, 255, 255, 0.08);
+                    transform: scale(1.05);
+                }}
+
+                .control-btn:active {{
+                    transform: scale(0.95);
+                }}
+
+                .play-btn {{
+                    font-size: 1.5rem;
+                    background: linear-gradient(135deg, #7C3AED, #6D28D9);
+                    color: #FFF;
+                    width: 50px;
+                    height: 50px;
+                    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+                }}
+
+                .play-btn:hover {{
+                    background: linear-gradient(135deg, #8B5CF6, #7C3AED);
+                    color: #FFF;
+                    box-shadow: 0 6px 16px rgba(124, 58, 237, 0.4);
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="player-card">
+                <div class="now-playing-label">
+                    <div class="pulse-dot"></div>
+                    <span id="playing-status">Now Playing</span>
+                </div>
+                
+                <div class="track-info">
+                    <div class="track-title" id="track-title">Loading track...</div>
+                    <div class="track-queue" id="track-queue">Song 0 of 0</div>
+                </div>
+
+                <div class="visualizer" id="visualizer">
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                </div>
+
+                <div class="progress-container">
+                    <input type="range" class="time-slider" id="time-slider" min="0" max="100" value="0">
+                    <div class="time-display">
+                        <span id="current-time">0:00</span>
+                        <span id="duration">0:00</span>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button class="control-btn" id="prev-btn" title="Previous">⏮️</button>
+                    <button class="control-btn play-btn" id="play-btn" title="Play/Pause">▶️</button>
+                    <button class="control-btn" id="next-btn" title="Next">⏭️</button>
+                </div>
+            </div>
+
+            <script>
+                const pyQueue = {queue_json};
+                const pyNames = {names_json};
+                const pyIndex = {current_idx};
+
+                let queue = pyQueue;
+                let names = pyNames;
+                let index = pyIndex;
+                let isResuming = false;
+
+                // Sync with localStorage to handle Streamlit reruns
+                const localQueueStr = localStorage.getItem("office_music_queue");
+                if (localQueueStr) {{
+                    try {{
+                        const localQueue = JSON.parse(localQueueStr);
+                        if (JSON.stringify(localQueue) === JSON.stringify(pyQueue)) {{
+                            const localIndex = localStorage.getItem("office_music_index");
+                            if (localIndex !== null) {{
+                                const parsedIndex = parseInt(localIndex, 10);
+                                if (parsedIndex >= 0 && parsedIndex < queue.length) {{
+                                    index = parsedIndex;
+                                    isResuming = true;
+                                }}
+                            }}
+                        }}
+                    }} catch(e) {{
+                        console.error("Local storage parse error:", e);
+                    }}
+                }}
+
+                // Save to localStorage
+                localStorage.setItem("office_music_queue", JSON.stringify(queue));
+                localStorage.setItem("office_music_names", JSON.stringify(names));
+                localStorage.setItem("office_music_index", index);
+
+                // Audio Object
+                const audio = new Audio();
+                audio.src = queue[index];
+                audio.preload = "auto";
+
+                // DOM Elements
+                const trackTitle = document.getElementById("track-title");
+                const trackQueue = document.getElementById("track-queue");
+                const playBtn = document.getElementById("play-btn");
+                const prevBtn = document.getElementById("prev-btn");
+                const nextBtn = document.getElementById("next-btn");
+                const timeSlider = document.getElementById("time-slider");
+                const currentTimeSpan = document.getElementById("current-time");
+                const durationSpan = document.getElementById("duration");
+                const visualizerBars = document.querySelectorAll(".bar");
+                const playingStatus = document.getElementById("playing-status");
+
+                function formatTime(secs) {{
+                    if (isNaN(secs)) return "0:00";
+                    const m = Math.floor(secs / 60);
+                    const s = Math.floor(secs % 60).toString().padStart(2, '0');
+                    return `${{m}}:${{s}}`;
+                }}
+
+                function updateTrackUI() {{
+                    trackTitle.textContent = names[index];
+                    trackQueue.textContent = `Song ${{index + 1}} of ${{queue.length}}`;
+                }}
+
+                function toggleVisualizer(isPlaying) {{
+                    visualizerBars.forEach(bar => {{
+                        if (isPlaying) {{
+                            bar.classList.add("active");
+                        }} else {{
+                            bar.classList.remove("active");
+                        }}
+                    }});
+                }}
+
+                function playSong(idx) {{
+                    index = idx;
+                    audio.src = queue[index];
+                    localStorage.setItem("office_music_index", index);
+                    localStorage.setItem("office_music_time", "0");
+                    updateTrackUI();
+                    
+                    audio.play()
+                        .then(() => {{
+                            playBtn.textContent = "⏸️";
+                            playingStatus.textContent = "Now Playing";
+                            toggleVisualizer(true);
+                        }})
+                        .catch(err => {{
+                            console.log("Play failed:", err);
+                            playBtn.textContent = "▶️";
+                            playingStatus.textContent = "Paused";
+                            toggleVisualizer(false);
+                        }});
+                }}
+
+                function playNext() {{
+                    if (index + 1 < queue.length) {{
+                        playSong(index + 1);
+                    }} else {{
+                        // Wrap around to start of queue
+                        playSong(0);
+                    }}
+                }}
+
+                function playPrev() {{
+                    if (index - 1 >= 0) {{
+                        playSong(index - 1);
+                    }} else {{
+                        // Wrap around to end of queue
+                        playSong(queue.length - 1);
+                    }}
+                }}
+
+                // Listeners
+                playBtn.addEventListener('click', () => {{
+                    if (audio.paused) {{
+                        audio.play()
+                            .then(() => {{
+                                playBtn.textContent = "⏸️";
+                                playingStatus.textContent = "Now Playing";
+                                toggleVisualizer(true);
+                            }})
+                            .catch(err => console.log(err));
+                    }} else {{
+                        audio.pause();
+                        playBtn.textContent = "▶️";
+                        playingStatus.textContent = "Paused";
+                        toggleVisualizer(false);
+                    }}
+                }});
+
+                prevBtn.addEventListener('click', playPrev);
+                nextBtn.addEventListener('click', playNext);
+
+                audio.addEventListener('timeupdate', () => {{
+                    if (!isNaN(audio.duration)) {{
+                        const progress = (audio.currentTime / audio.duration) * 100;
+                        timeSlider.value = progress;
+                        currentTimeSpan.textContent = formatTime(audio.currentTime);
+                        durationSpan.textContent = formatTime(audio.duration);
+                        
+                        // Save play time
+                        localStorage.setItem("office_music_time", audio.currentTime);
+                        localStorage.setItem("office_music_index", index);
+                    }}
+                }});
+
+                timeSlider.addEventListener('input', () => {{
+                    if (!isNaN(audio.duration)) {{
+                        const newTime = (timeSlider.value / 100) * audio.duration;
+                        audio.currentTime = newTime;
+                    }}
+                }});
+
+                audio.addEventListener('ended', playNext);
+
+                audio.addEventListener('loadedmetadata', () => {{
+                    durationSpan.textContent = formatTime(audio.duration);
+                }});
+
+                // Initialize
+                updateTrackUI();
+
+                if (isResuming) {{
+                    const savedTime = localStorage.getItem("office_music_time");
+                    if (savedTime) {{
+                        audio.currentTime = parseFloat(savedTime);
+                    }}
+                    audio.play()
+                        .then(() => {{
+                            playBtn.textContent = "⏸️";
+                            playingStatus.textContent = "Now Playing";
+                            toggleVisualizer(true);
+                        }})
+                        .catch(err => {{
+                            console.log("Autoplay resume blocked:", err);
+                            playBtn.textContent = "▶️";
+                            playingStatus.textContent = "Paused";
+                            toggleVisualizer(false);
+                        }});
+                }} else {{
+                    // Brand new play, trigger autoplay
+                    audio.play()
+                        .then(() => {{
+                            playBtn.textContent = "⏸️";
+                            playingStatus.textContent = "Now Playing";
+                            toggleVisualizer(true);
+                        }})
+                        .catch(err => {{
+                            console.log("Autoplay blocked:", err);
+                            playBtn.textContent = "▶️";
+                            playingStatus.textContent = "Paused";
+                            toggleVisualizer(false);
+                        }});
+                }}
+            </script>
+        </body>
+        </html>
+        """
+
+        html(player_html, height=270)
 
     else:
-
         st.info("Belum ada musik diputar")
 
 # ======================================================
@@ -457,6 +880,10 @@ elif menu == "🎵 Library":
                     st.session_state.current_song_name = (
                         song["title"]
                     )
+
+                    st.session_state.playlist_queue = [stream_url]
+                    st.session_state.playlist_queue_names = [song["title"]]
+                    st.session_state.playlist_index = 0
 
                     st.rerun()
 
@@ -691,6 +1118,10 @@ elif menu == "📁 Playlist":
                     st.session_state.current_song_name = (
                         song["title"]
                     )
+
+                    st.session_state.playlist_queue = [stream_url]
+                    st.session_state.playlist_queue_names = [song["title"]]
+                    st.session_state.playlist_index = 0
 
                     st.rerun()
 
