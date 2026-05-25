@@ -272,7 +272,8 @@ with st.sidebar:
 
         st.audio(
             unique_audio_url,
-            format="audio/mp3"
+            format="audio/mp3",
+            autoplay=True
         )
 
     else:

@@ -54,6 +54,7 @@ app.include_router(
 
 app.include_router(
     player_router,
+    prefix="/player",
     tags=["Player"]
 )
 
