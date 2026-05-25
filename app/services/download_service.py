@@ -1,4 +1,5 @@
 import os
+import html
 import yt_dlp
 
 from app.core.constants import (
@@ -8,15 +9,9 @@ from app.core.constants import (
 
 from app.utils.helper import safe_filename
 
-os.makedirs(
-    DOWNLOAD_FOLDER,
-    exist_ok=True
-)
+os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
-os.makedirs(
-    VIDEO_FOLDER,
-    exist_ok=True
-)
+os.makedirs(VIDEO_FOLDER, exist_ok=True)
 
 def register_song(video, filename):
     from app.core.database import get_connection
@@ -43,16 +38,16 @@ def register_song(video, filename):
 
 def download_audio(video):
 
+    video['title'] = html.unescape(video.get('title', ''))
+    video['channel'] = html.unescape(video.get('channel', ''))
+
     title = safe_filename(
         video['title']
     )
 
     filename = f"{title}.mp3"
 
-    output_mp3 = os.path.join(
-        DOWNLOAD_FOLDER,
-        filename
-    )
+    output_mp3 = os.path.join(DOWNLOAD_FOLDER, filename)
 
     if os.path.exists(output_mp3):
 
@@ -66,10 +61,7 @@ def download_audio(video):
             'bestaudio/best',
 
         'outtmpl':
-            os.path.join(
-                DOWNLOAD_FOLDER,
-                f"{title}.%(ext)s"
-            ),
+            os.path.join(DOWNLOAD_FOLDER, f"{title}.%(ext)s"),
 
         'quiet':
             True,
@@ -110,14 +102,14 @@ def download_audio(video):
 
 def download_video(video):
 
+    video['title'] = html.unescape(video.get('title', ''))
+    video['channel'] = html.unescape(video.get('channel', ''))
+
     title = safe_filename(
         video['title']
     )
 
-    output_mp4 = os.path.join(
-        VIDEO_FOLDER,
-        f"{title}.mp4"
-    )
+    output_mp4 = os.path.join(VIDEO_FOLDER, f"{title}.mp4")
 
     if os.path.exists(output_mp4):
 
@@ -129,10 +121,7 @@ def download_video(video):
             'bestvideo+bestaudio/best',
 
         'outtmpl':
-            os.path.join(
-                VIDEO_FOLDER,
-                f"{title}.%(ext)s"
-            ),
+            os.path.join(VIDEO_FOLDER, f"{title}.%(ext)s"),
 
         'quiet':
             True,

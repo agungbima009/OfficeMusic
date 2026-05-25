@@ -1,4 +1,7 @@
+
 import os
+import html as html_lib
+from urllib.parse import unquote
 
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
@@ -15,9 +18,9 @@ from app.services.player_service import (
     previous_song,
 )
 
-router = APIRouter()
+from app.core.constants import DOWNLOAD_FOLDER
 
-DOWNLOAD_FOLDER = "music_cache"
+router = APIRouter()
 
 
 # =========================================================
@@ -33,6 +36,7 @@ class PlaylistRequest(BaseModel):
 @router.post("/play/{song_name}")
 def play(song_name: str):
 
+    song_name = html_lib.unescape(unquote(song_name))
     current = play_music(song_name)
 
     return {
@@ -48,8 +52,9 @@ def play(song_name: str):
 @router.post("/playlist/play")
 def play_playlist(data: PlaylistRequest):
 
+    songs = [html_lib.unescape(s) for s in data.songs]
     current = set_playlist_queue(
-        data.songs
+        songs
     )
 
     return {
@@ -160,6 +165,9 @@ def current():
 # =========================================================
 @router.get("/stream/{song_name}")
 def stream(song_name: str):
+
+    # Decode URL encoding lalu HTML entity (&amp; -> &)
+    song_name = html_lib.unescape(unquote(song_name))
 
     song_path = os.path.join(
         DOWNLOAD_FOLDER,

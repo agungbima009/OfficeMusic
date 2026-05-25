@@ -1,11 +1,16 @@
+
 import os
 import sys
 import threading
 
-DOWNLOAD_FOLDER = "music_cache"
+if sys.platform == "win32":
+    import ctypes
+else:
+    ctypes = None  # type: ignore[assignment]
 
-IS_WINDOWS = sys.platform.startswith("win")
-IS_LINUX = sys.platform.startswith("linux")
+from app.core.constants import DOWNLOAD_FOLDER
+
+IS_WINDOWS = sys.platform == "win32"
 
 # =========================================================
 # PLAYER STATE
@@ -21,30 +26,14 @@ PLAYER_LOCK = threading.Lock()
 # =========================================================
 # WINDOWS AUDIO API
 # =========================================================
-if IS_WINDOWS:
-
-    import ctypes
-
-    def send_mci_command(command):
-
-        try:
-
-            ctypes.windll.winmm.mciSendStringW(
-                command,
-                None,
-                0,
-                0
-            )
-
-            return True
-
-        except Exception:
-            return False
-
-else:
-
-    def send_mci_command(command):
+def send_mci_command(command: str) -> bool:
+    if not IS_WINDOWS or ctypes is None:
         return True
+    try:
+        ctypes.windll.winmm.mciSendStringW(command, None, 0, 0)  # type: ignore[union-attr]
+        return True
+    except Exception:
+        return False
 
 
 # =========================================================
@@ -54,14 +43,7 @@ def _play(song_name):
 
     global CURRENT_SONG
 
-    song_path = os.path.normpath(
-        os.path.abspath(
-            os.path.join(
-                DOWNLOAD_FOLDER,
-                song_name
-            )
-        )
-    )
+    song_path = os.path.join(DOWNLOAD_FOLDER, song_name)
 
     if not os.path.exists(song_path):
 
@@ -216,7 +198,7 @@ def pause_music():
 
         send_mci_command("pause myg")
 
-    return CURRENT_SONG
+    # Linux mode: state-only, tidak ada subprocess yang perlu di-pause
 
 
 # =========================================================
@@ -228,7 +210,7 @@ def resume_music():
 
         send_mci_command("resume myg")
 
-    return CURRENT_SONG
+    # Linux mode: state-only, tidak ada subprocess yang perlu di-resume
 
 
 # =========================================================

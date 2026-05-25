@@ -1,9 +1,9 @@
 
 import os
-
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+import html as html_lib
 from urllib.parse import unquote
 
 from app.services.playlist_service import (
@@ -19,9 +19,9 @@ from app.services.playlist_service import (
     get_playlist_stream_urls
 )
 
-router = APIRouter()
+from app.core.constants import DOWNLOAD_FOLDER
 
-DOWNLOAD_FOLDER = "music_cache"
+router = APIRouter()
 
 
 # =========================================
@@ -57,12 +57,11 @@ def playlist():
 @router.get("/stream/{filename:path}")
 async def stream_music(filename: str):
 
-    filename = unquote(filename)
+    # unquote: decode %XX encoding (URL decode)
+    # html_lib.unescape: decode &amp; -> & dll (HTML entity decode)
+    filename = html_lib.unescape(unquote(filename))
 
-    file_path = os.path.join(
-        DOWNLOAD_FOLDER,
-        filename
-    )
+    file_path = os.path.join(DOWNLOAD_FOLDER, filename)
 
     if not os.path.exists(file_path):
 
@@ -84,6 +83,7 @@ async def stream_music(filename: str):
 @router.delete("/playlist/{filename}")
 def delete_music(filename: str):
 
+    filename = html_lib.unescape(unquote(filename))
     result = delete_song(filename)
 
     return result
@@ -95,6 +95,7 @@ def delete_music(filename: str):
 @router.get("/playlist/detail/{filename}")
 def detail_music(filename: str):
 
+    filename = html_lib.unescape(unquote(filename))
     result = get_song_detail(filename)
 
     return result
@@ -150,9 +151,10 @@ def stream_playlist(playlist_name: str):
 @router.post("/playlists")
 def add_to_playlist(data: PlaylistAddRequest):
 
+    song_filename = html_lib.unescape(data.song_filename)
     result = add_song_to_playlist(
         data.playlist_name,
-        data.song_filename
+        song_filename
     )
 
     return result
@@ -198,6 +200,7 @@ def remove_from_playlist(
     filename: str
 ):
 
+    filename = html_lib.unescape(unquote(filename))
     result = remove_song_from_playlist(
         playlist_name,
         filename

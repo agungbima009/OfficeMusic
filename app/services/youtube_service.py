@@ -1,3 +1,4 @@
+import html
 from googleapiclient.discovery import build
 
 from app.core.config import API_KEY
@@ -34,10 +35,10 @@ def youtube_search_music(query):
         videos.append({
 
             "title":
-                item["snippet"]["title"],
+                html.unescape(item["snippet"]["title"]),
 
             "channel":
-                item["snippet"]["channelTitle"],
+                html.unescape(item["snippet"]["channelTitle"]),
 
             "thumbnail":
                 item["snippet"]["thumbnails"]["high"]["url"],
@@ -47,4 +48,4 @@ def youtube_search_music(query):
 
         })
 
-    return videos
+    return videos
